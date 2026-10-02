@@ -3,7 +3,7 @@ import type { Rating, RunState } from '../types'
 import { speakCues } from '../cues'
 import { speak, stopSpeaking } from '../speech'
 import { say } from '../phrases.logic'
-import { formatMinOfDay, formatMmSs } from '../time'
+import { formatMinOfDayAp, formatMmSs } from '../time'
 import {
   canExtend,
   currentItem,
@@ -20,7 +20,7 @@ import {
   tick,
   upcomingFixed,
 } from '../runner'
-import { isFixed, runSectors } from '../schedule'
+import { isEndOfDay, isFixed, runSectors } from '../schedule'
 import { useWakeLock } from '../wakeLock'
 import { AnalogClock } from './AnalogClock'
 
@@ -93,7 +93,8 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
   const nowMs = Date.now()
 
   if (run.phase === 'done') {
-    const endOfDay = run.session.entries.some((e) => e.kind === 'fixed' && e.plannedMinutes === 0)
+    // 1日のおわり（ねる）で終わったか（時刻だけのカードや、ふつうの終わりとは区別する）
+    const endOfDay = run.session.entries.some((e) => e.kind === 'fixed' && run.items.some((i) => isEndOfDay(i) && i.name === e.name))
     return (
       <main className="runner runner--done">
         <div className="done">
@@ -138,7 +139,7 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
           <span className="next-chip__emoji">{it.emoji}</span>
           {isFixed(it) && '📌 '}
           {it.name}
-          {isFixed(it) && <small>{formatMinOfDay(it.startMin ?? 0)}</small>}
+          {isFixed(it) && <small>{formatMinOfDayAp(it.startMin ?? 0)}</small>}
         </span>
       </div>
     ) : (
@@ -168,7 +169,7 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
           <div className="fixed-banner" role="alert">
             <span>⏰</span>
             <b>
-              {formatMinOfDay(due.startMin ?? 0)}だよ！ {due.emoji} {due.name}の じかんだよ
+              {formatMinOfDayAp(due.startMin ?? 0)}だよ！ {due.emoji} {due.name}の じかんだよ
             </b>
           </div>
         )}
@@ -269,7 +270,7 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
       {top}
       {up && (
         <p className="runner__until">
-          📌 {up.item.name}（{formatMinOfDay(up.item.startMin ?? 0)}）まで あと {Math.max(0, Math.ceil((up.startMs - nowMs) / 60_000))}ふん
+          📌 {up.item.name}（{formatMinOfDayAp(up.item.startMin ?? 0)}）まで あと {Math.max(0, Math.ceil((up.startMs - nowMs) / 60_000))}ふん
         </p>
       )}
       <div className="runner__body">

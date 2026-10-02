@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import type { CardDef, FixedCard, HistorySession, Settings } from '../types'
-import { formatMinOfDay, formatSpan } from '../time'
+import type { CardDef, FixedCard, HistorySession, Settings, Templates, Vacation } from '../types'
+import { formatMinOfDayAp, formatSpan } from '../time'
 import { FixedCardEditor } from './FixedCardEditor'
+import { TemplatesDialog } from './TemplatesDialog'
 import { buildBackup, dateKey, mergeHistory, parseBackup } from '../history'
 import { DEFAULT_SETTINGS, isSpeechSupported, speakTest } from '../speech'
 import { say } from '../phrases.logic'
@@ -29,6 +30,9 @@ const TESTS: { label: string; text: () => string }[] = [
   { label: 'じかんぎれ', text: () => say('timeoutNote') },
   { label: 'のばせない', text: () => say('cannotExtend', { fixed: SAMPLE.fixed }) },
   { label: 'おやすみ', text: () => say('endOfDay') },
+  { label: 'でかける 10ぷんまえ', text: () => say('leaveSoon', { fixed: 'いえをでる', minutes: 10 }) },
+  { label: 'でかける 1ぷんまえ', text: () => say('leaveSoon', { fixed: 'いえをでる', minutes: 1 }) },
+  { label: 'いってらっしゃい', text: () => say('leaveNow') },
 ]
 
 export function SettingsDialog({
@@ -40,6 +44,11 @@ export function SettingsDialog({
   onDeleteCard,
   fixedCards,
   onFixedCards,
+  templates,
+  onTemplates,
+  vacations,
+  onVacations,
+  allCards,
   onClose,
 }: {
   settings: Settings
@@ -50,9 +59,16 @@ export function SettingsDialog({
   onDeleteCard: (id: string) => void
   fixedCards: FixedCard[]
   onFixedCards: (c: FixedCard[]) => void
+  templates: Templates
+  onTemplates: (t: Templates) => void
+  vacations: Vacation[]
+  onVacations: (v: Vacation[]) => void
+  /** どだいに入れられる ふつうのカード（パレットのカード＋じぶんでつくったカード） */
+  allCards: CardDef[]
   onClose: () => void
 }) {
   const [voices, setVoices] = useState<string[]>([])
+  const [showTemplates, setShowTemplates] = useState(false)
   const [editingFixed, setEditingFixed] = useState<FixedCard | 'new' | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -137,8 +153,10 @@ export function SettingsDialog({
                   <span className="preset__items">{c.emoji}</span>
                   <b>{c.name}</b>
                   <small>
-                    {formatMinOfDay(c.startMin)}
-                    {c.minutes === 0 ? ' から（1日の おわり）' : ` 〜 ${formatSpan(c.minutes)}`}
+                    {formatMinOfDayAp(c.startMin)}
+                    {(c.endOfDay ?? c.minutes === 0) ? ' から（1日の おわり）' : c.minutes === 0 ? '' : ` 〜 ${formatSpan(c.minutes)}`}
+                    {c.quiet && ' 🔕'}
+                    {c.leaving && ' 🚪'}
                   </small>
                 </span>
                 <button type="button" className="icon-btn" aria-label={`${c.name} をなおす`} onClick={() => setEditingFixed(c)}>
@@ -157,6 +175,14 @@ export function SettingsDialog({
         </ul>
         <button type="button" className="big-btn big-btn--sub" onClick={() => setEditingFixed('new')}>
           ＋ じこくカードを ついか
+        </button>
+      </div>
+
+      <div className="field">
+        <span>📆 まいにちの どだい（がっこうの日・やすみの日）</span>
+        <small>月〜金は がっこうの日、土日と 日本の しゅくじつは やすみの日。じこくや カードを かえたり、曜日ごとに ちがう どだいに できます</small>
+        <button type="button" className="big-btn big-btn--sub" onClick={() => setShowTemplates(true)}>
+          📆 どだいと ながい やすみを ひらく
         </button>
       </div>
 
@@ -205,6 +231,17 @@ export function SettingsDialog({
             ))}
           </ul>
         </div>
+      )}
+      {showTemplates && (
+        <TemplatesDialog
+          templates={templates}
+          onTemplates={onTemplates}
+          fixedCards={fixedCards}
+          cards={allCards}
+          vacations={vacations}
+          onVacations={onVacations}
+          onClose={() => setShowTemplates(false)}
+        />
       )}
       {editingFixed && (
         <FixedCardEditor

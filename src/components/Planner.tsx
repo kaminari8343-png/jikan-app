@@ -18,12 +18,14 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities'
 import type { CardDef, FixedCard, PlanItem } from '../types'
 import { MAX_MINUTES, MIN_MINUTES } from '../cards'
-import { formatClock, formatMinOfDay, formatMinutes, formatSpan, minuteOfDay } from '../time'
+import { formatClock, formatClockAp, formatMinOfDay, formatMinOfDayAp, formatMinutes, formatSpan, minuteOfDay } from '../time'
 import {
   insertAtBlockEnd,
   insertFixed,
   insertNormalSmart,
+  isEndOfDay,
   isFixed,
+  isMoment,
   type Block,
   type Timeline,
 } from '../schedule'
@@ -68,6 +70,12 @@ interface Props {
   /** 計算につかっているスタート時刻（ms）と、その日の 0:00（ms） */
   startAt: number
   dayStartMs: number
+  /** きょうのよてい？（あしたのよていは、過ぎた時刻のうすい表示などをしない） */
+  isToday: boolean
+  /** 「いま」(ms)。過ぎた時刻のじこくカードを うすくするのに使う */
+  nowMs: number
+  /** あしたのよていの、スタート時刻の初期値（0:00からの分） */
+  defaultStartMin: number
   onStartMin: (m: number | null) => void
   onChange: (items: PlanItem[]) => void
   onCreateCard: () => void
@@ -82,6 +90,9 @@ export function Planner({
   startMin,
   startAt,
   dayStartMs,
+  isToday,
+  nowMs,
+  defaultStartMin,
   onStartMin,
   onChange,
   onCreateCard,
@@ -179,11 +190,13 @@ export function Planner({
       onDragCancel={() => setDragging(null)}
     >
       <section className="plan-area" aria-label="きょうのよてい">
-        <StartTime now={now} startMin={startMin} onChange={onStartMin} />
+        <StartTime now={now} isToday={isToday} defaultMin={defaultStartMin} startMin={startMin} onChange={onStartMin} />
         <PlanList
           items={items}
           timeline={timeline}
           dragging={dragging}
+          fadePast={isToday}
+          nowMs={nowMs}
           onMinutes={setMinutes}
           onRemove={(uid) => onChange(items.filter((i) => i.uid !== uid))}
         />
@@ -224,10 +237,22 @@ export function Planner({
   )
 }
 
-/** スタート時刻（はじめは「いま」。−／＋で変えられる） */
-function StartTime({ now, startMin, onChange }: { now: Date; startMin: number | null; onChange: (m: number | null) => void }) {
-  const nowMin = Math.floor(minuteOfDay(now.getTime()))
-  const shown = startMin ?? nowMin
+/** スタート時刻（きょうは はじめ「いま」。−／＋で変えられる。あしたは はじめ 最初のじこくカードの時刻） */
+function StartTime({
+  now,
+  isToday,
+  defaultMin,
+  startMin,
+  onChange,
+}: {
+  now: Date
+  isToday: boolean
+  defaultMin: number
+  startMin: number | null
+  onChange: (m: number | null) => void
+}) {
+  const baseMin = isToday ? Math.floor(minuteOfDay(now.getTime())) : defaultMin
+  const shown = startMin ?? baseMin
   const step = (d: number) => onChange(Math.min(24 * 60 - 1, Math.max(0, shown + d)))
   return (
     <div className="start-time">
@@ -235,14 +260,14 @@ function StartTime({ now, startMin, onChange }: { now: Date; startMin: number | 
       <span className="stepper stepper--light">
         <StepButton label="−" ariaLabel="スタートを はやく" direction={-1} onStep={step} />
         <span className="stepper__value stepper__value--wide">
-          {startMin === null && <small>いま </small>}
+          {startMin === null && isToday && <small>いま </small>}
           {formatMinOfDay(shown)}
         </span>
         <StepButton label="＋" ariaLabel="スタートを おそく" direction={1} onStep={step} />
       </span>
       {startMin !== null && (
         <button type="button" className="link-btn" onClick={() => onChange(null)}>
-          いまに もどす
+          {isToday ? 'いまに もどす' : 'もとに もどす'}
         </button>
       )}
     </div>
@@ -253,11 +278,13 @@ function PlanList(props: {
   items: PlanItem[]
   timeline: Timeline
   dragging: Dragging
+  fadePast: boolean
+  nowMs: number
   onMinutes: (uid: string, delta: number) => void
   onRemove: (uid: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: LIST_ZONE })
-  const { items, timeline, dragging } = props
+  const { items, timeline, dragging, fadePast, nowMs } = props
   const blockOf = new Map<string, Block>()
   for (const b of timeline.blocks) if (b.fixed) blockOf.set(b.fixed.uid, b)
   return (
@@ -270,7 +297,13 @@ function PlanList(props: {
             return (
               <div key={item.uid} className="plan-group">
                 {block && <BlockFooter block={block} fixed={item} />}
-                <FixedRow item={item} startMs={row?.startMs} endMs={row?.endMs} onRemove={props.onRemove} />
+                <FixedRow
+                  item={item}
+                  startMs={row?.startMs}
+                  endMs={row?.endMs}
+                  past={fadePast && row != null && (isMoment(item) ? row.startMs : row.endMs) <= nowMs}
+                  onRemove={props.onRemove}
+                />
               </div>
             )
           }
@@ -279,7 +312,8 @@ function PlanList(props: {
             <PlanRow
               key={item.uid}
               item={item}
-              startMs={row?.startMs}
+              startMs={row?.past ? undefined : row?.startMs}
+              faded={!!row?.past}
               late={pastEnd}
               onMinutes={props.onMinutes}
               onRemove={props.onRemove}
@@ -302,6 +336,8 @@ function BlockFooter({ block, fixed }: { block: Block; fixed: PlanItem }) {
   const { setNodeRef, isOver } = useDroppable({ id: BLOCK_PREFIX + fixed.uid })
   const free = block.freeMs ?? 0
   const freeMin = Math.floor(free / 60_000)
+  // もう過ぎたブロックと、カードも あきじかんも ないブロック（いえをでる〜がっこう など）は、何も出さない
+  if (block.past || (block.rows.length === 0 && freeMin < 1 && !block.passed)) return <div ref={setNodeRef} className="block-footer--none" />
   let cls = 'block-footer'
   let body
   if (block.passed) {
@@ -359,20 +395,24 @@ function FixedRow({
   item,
   startMs,
   endMs,
+  past,
   onRemove,
 }: {
   item: PlanItem
   startMs?: number
   endMs?: number
+  /** もう過ぎた時刻（うすく表示する） */
+  past?: boolean
   onRemove: (uid: string) => void
 }) {
   // じこくカードは ドラッグでは動かせない（時刻順に自動で ならぶ）
   const { setNodeRef, transform, transition } = useSortable({ id: item.uid, disabled: { draggable: true } })
-  const endOfDay = item.minutes === 0
+  const endOfDay = isEndOfDay(item)
+  const moment = isMoment(item)
   return (
     <div
       ref={setNodeRef}
-      className="plan-row plan-row--fixed"
+      className={`plan-row plan-row--fixed${past ? ' plan-row--past' : ''}`}
       style={{ background: item.color, transform: CSS.Transform.toString(transform), transition }}
     >
       <span className="plan-row__pin" aria-hidden>
@@ -382,13 +422,21 @@ function FixedRow({
         {item.emoji}
       </span>
       <span className="plan-row__text">
-        <span className="plan-row__name">{item.name}</span>
+        <span className="plan-row__name">
+          {item.name}
+          {item.quiet && (
+            <span className="quiet-mark" title="しずか（おしらせを しないよ）" aria-label="しずか">
+              🔕
+            </span>
+          )}
+        </span>
         <span className="plan-row__start">
-          {startMs != null && formatClock(new Date(startMs))}
-          {endOfDay ? ' から（1日の おわり）' : endMs != null ? `〜${formatClock(new Date(endMs))}` : ''}
+          {startMs != null && formatClockAp(new Date(startMs))}
+          {endOfDay ? ' から（1日の おわり）' : moment ? '' : endMs != null ? `〜${formatClockAp(new Date(endMs))}` : ''}
+          {past && ' （すぎたよ）'}
         </span>
       </span>
-      {!endOfDay && <span className="fixed-len">{formatMinutes(item.minutes)}</span>}
+      {!endOfDay && !moment && <span className="fixed-len">{formatSpan(item.minutes)}</span>}
       <button
         type="button"
         className="remove-btn"
@@ -405,12 +453,15 @@ function FixedRow({
 function PlanRow({
   item,
   startMs,
+  faded,
   late,
   onMinutes,
   onRemove,
 }: {
   item: PlanItem
   startMs?: number
+  /** もう過ぎたブロックのカード（うすく表示） */
+  faded?: boolean
   late?: boolean
   onMinutes: (uid: string, delta: number) => void
   onRemove: (uid: string) => void
@@ -419,7 +470,7 @@ function PlanRow({
   return (
     <div
       ref={setNodeRef}
-      className={`plan-row${isDragging ? ' plan-row--ghost' : ''}${late ? ' plan-row--late' : ''}`}
+      className={`plan-row${isDragging ? ' plan-row--ghost' : ''}${late ? ' plan-row--late' : ''}${faded ? ' plan-row--past' : ''}`}
       style={{ background: item.color, transform: CSS.Transform.toString(transform), transition }}
       {...attributes}
       {...listeners}
@@ -497,7 +548,9 @@ function PaletteCard({ card, onAdd }: { card: CardDef; onAdd: (c: CardDef) => vo
 
 function FixedPaletteCard({ card, used, onAdd }: { card: FixedCard; used: boolean; onAdd: (c: FixedCard) => void }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: `fixed:${card.id}`, disabled: used })
-  const sub = card.minutes === 0 ? `${formatMinOfDay(card.startMin)}から` : `${formatMinOfDay(card.startMin)}〜`
+  const endOfDay = card.endOfDay ?? card.minutes === 0
+  const t = formatMinOfDayAp(card.startMin)
+  const sub = endOfDay ? `${t}から` : card.minutes === 0 ? t : `${t}〜`
   return (
     <button
       ref={setNodeRef}
@@ -548,7 +601,7 @@ function Palette({
         <>
           <h2 className="palette__title">やること</h2>
           <div className="palette__grid">
-            {cards.map((c) => (
+            {cards.filter((c) => c.group !== 'morning').map((c) => (
               <PaletteCard key={c.id} card={c} onAdd={onAdd} />
             ))}
             <button type="button" className="card-btn" onClick={onCreateCard}>
@@ -558,6 +611,16 @@ function Palette({
               </div>
             </button>
           </div>
+          {cards.some((c) => c.group === 'morning') && (
+            <>
+              <h2 className="palette__title palette__title--fixed">☀️ あさの カード</h2>
+              <div className="palette__grid">
+                {cards.filter((c) => c.group === 'morning').map((c) => (
+                  <PaletteCard key={c.id} card={c} onAdd={onAdd} />
+                ))}
+              </div>
+            </>
+          )}
           {sortedFixed.length > 0 && (
             <>
               <h2 className="palette__title palette__title--fixed">📌 じこくカード</h2>
