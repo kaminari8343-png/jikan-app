@@ -15,8 +15,24 @@ export function numberToKana(n: number): string {
   return s
 }
 
-/** 「ふん／ぷん」つきの分の読み。例: 7→ななふん, 10→じゅっぷん, 15→じゅうごふん */
+const HOUR_COUNT = ['', 'いち', 'に', 'さん', 'よ', 'ご', 'ろく', 'なな', 'はち', 'く', 'じゅう']
+
+/** 「じかん」つきの時間の読み。例: 1→いちじかん, 4→よじかん, 12→じゅうにじかん */
+function hoursToKana(h: number): string {
+  const body = h <= 10 ? HOUR_COUNT[h] : h < 20 ? `じゅう${HOUR_COUNT[h - 10]}` : h === 20 ? 'にじゅう' : `にじゅう${HOUR_COUNT[h - 20]}`
+  return `${body}じかん`
+}
+
+/**
+ * 「ふん／ぷん」つきの分の読み。例: 7→ななふん, 10→じゅっぷん, 15→じゅうごふん
+ * 60ぷん以上は「じかん」で読む。例: 60→いちじかん, 90→いちじかん さんじゅっぷん, 206→さんじかん ろくふん
+ */
 export function minutesToKana(n: number): string {
+  if (n >= 60) {
+    const h = Math.floor(n / 60)
+    const m = n % 60
+    return m === 0 ? hoursToKana(h) : `${hoursToKana(h)} ${minutesToKana(m)}`
+  }
   const ones = n % 10
   const body = n - ones === 0 ? '' : numberToKana(n - ones)
   switch (ones) {
@@ -81,6 +97,15 @@ export function formatMinOfDay(minOfDay: number): string {
   return m === 0 ? `${h}じ` : `${h}じ${m}${funSuffix(m)}`
 }
 
+/** 画面用: 「ごぜん／ごご」つき。例: 18:30 → ごご6じ30ぷん（じこくカード用。12じかん表示だと朝夕が見分けにくいため） */
+export function formatMinOfDayAp(minOfDay: number): string {
+  return `${minOfDay % 1440 < 720 ? 'ごぜん' : 'ごご'}${formatMinOfDay(minOfDay)}`
+}
+
+export function formatClockAp(d: Date): string {
+  return formatMinOfDayAp(d.getHours() * 60 + d.getMinutes())
+}
+
 /** 0:00からの分 ←→ "HH:MM"（<input type="time"> 用） */
 export const minOfDayToInput = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
 export function inputToMinOfDay(v: string): number | null {
@@ -110,6 +135,13 @@ export function formatSpan(min: number): string {
   const h = Math.floor(min / 60)
   const m = min % 60
   return m === 0 ? `${h}じかん` : `${h}じかん${formatMinutes(m)}`
+}
+
+/** n日あと（マイナスは まえ）の同じ時刻（ms） */
+export function addDaysMs(ms: number, n: number): number {
+  const d = new Date(ms)
+  d.setDate(d.getDate() + n)
+  return d.getTime()
 }
 
 export function addMinutes(d: Date, minutes: number): Date {

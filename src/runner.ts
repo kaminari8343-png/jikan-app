@@ -4,7 +4,7 @@ import type { HistoryEntry, HistorySession, PlanItem, Rating, RunState } from '.
 import type { PhraseKey } from './phrases'
 import type { PhraseVars } from './phrases.logic'
 import { closeSession } from './history'
-import { fixedEndOf, fixedStartOf, isFixed } from './schedule'
+import { fixedEndOf, fixedStartOf, isEndOfDay, isFixed, isMoment } from './schedule'
 import { startOfDay } from './time'
 
 const MIN = 60_000
@@ -119,7 +119,7 @@ const keepFired = (fired: string[]) => fired.filter((k) => k.includes(':'))
 
 // ---- はじめる・つぎへ進む ----
 
-function finishRun(r: RunState, cues: Cue[], endOfDay: boolean): Step {
+function finishRun(r: RunState, cues: Cue[], endOfDay: boolean, quiet = false): Step {
   const done: RunState = {
     ...r,
     phase: 'done',
@@ -127,18 +127,29 @@ function finishRun(r: RunState, cues: Cue[], endOfDay: boolean): Step {
     accumMs: 0,
     session: { ...r.session, status: 'finished' },
   }
-  cues.push({ key: endOfDay ? 'endOfDay' : 'allDone' })
+  // しずかのじこくカードで終わるときは、おわりのセリフも言わない
+  if (!quiet) cues.push({ key: endOfDay ? 'endOfDay' : 'allDone' })
   return { run: done, cues }
+}
+
+/** じこくカードの時刻になったときの知らせ。しずかなら なし */
+function arrivalCue(item: PlanItem): Cue | null {
+  if (item.quiet) return null
+  if (item.leaving) return { key: 'leaveNow' }
+  return { key: 'fixedStart', vars: { fixed: item.name, clock: item.startMin } }
 }
 
 /**
  * items[i] から先へ進める（いまの時刻 now で）。
  * - ふつうのカード: つぎのじこくカードの時刻をすぎていたら、そのブロックの残りは「じかんぎれ」
+ *   （ただし、スタートする前にもう過ぎていたブロックは、記録せずに とばす）
  * - じこくカード: まだなら「じゆうじかん」、時刻なら そのカードをはじめる
+ * - 時刻だけのじこくカード（おきる・いえをでる）: 時刻ちょうどなら知らせて、すぐ つぎへ
  */
 function enterFrom(r0: RunState, i0: number, now: number, opts: { first?: boolean; arrived?: boolean } = {}): Step {
   let r = r0
   let i = i0
+  let arrived = !!opts.arrived
   const cues: Cue[] = []
   for (;;) {
     const item = r.items[i]
@@ -147,8 +158,7 @@ function enterFrom(r0: RunState, i0: number, now: number, opts: { first?: boolea
     if (isFixed(item)) {
       const start = fixedStartOf(item, r.dayStartMs)
       const end = fixedEndOf(item, r.dayStartMs)
-      const vars = { fixed: item.name, clock: item.startMin }
-      if (item.minutes === 0) {
+      if (isEndOfDay(item)) {
         if (now >= start) {
           // 1日のおわり（ねる）。のこりのカードは じかんぎれ
           r = pushEntry({ ...r, index: i }, { ...fixedEntry(item, now), endedAt: now, result: 'done' })
@@ -159,21 +169,39 @@ function enterFrom(r0: RunState, i0: number, now: number, opts: { first?: boolea
               timedOut = true
             }
           }
-          if (opts.arrived) cues.push({ key: 'fixedStart', vars })
+          const arrive = arrived ? arrivalCue(item) : null
+          if (arrive) cues.push(arrive)
           if (timedOut) cues.push({ key: 'timeoutNote' })
-          return finishRun(r, cues, true)
+          return finishRun(r, cues, true, !!item.quiet)
+        }
+      } else if (isMoment(item)) {
+        if (now >= start) {
+          // 時刻ぴったり（または、いま着いた・もう知らせた）なら記録して知らせる。だいぶ過ぎていたら、だまって とばす
+          const announced = r.fired.includes(`fix:${item.uid}`)
+          if (arrived || announced || now - start <= LATE_MS) {
+            r = pushEntry({ ...r, index: i }, { ...fixedEntry(item, now), endedAt: now, result: 'done' })
+            const arrive = announced ? null : arrivalCue(item)
+            if (arrive) cues.push(arrive)
+          }
+          i++
+          arrived = false
+          continue
         }
       } else if (now >= end) {
         i++ // もう終わっている時間のじこくカードは とばす
+        arrived = false
         continue
       } else if (now >= start) {
         r = pushEntry(
           { ...r, index: i, phase: 'fixed', accumMs: 0, runningSince: null, extraMs: 0, fired: keepFired(r.fired) },
           fixedEntry(item, now),
         )
-        cues.push(
-          opts.arrived ? { key: 'fixedStart', vars } : { key: 'start', vars: { name: item.name, minutes: item.minutes } },
-        )
+        const cue: Cue | null = arrived
+          ? arrivalCue(item)
+          : item.quiet
+            ? null
+            : { key: 'start', vars: { name: item.name, minutes: item.minutes } }
+        if (cue) cues.push(cue)
         return { run: r, cues }
       }
       // まだ時刻じゃない → じゆうじかん
@@ -193,9 +221,12 @@ function enterFrom(r0: RunState, i0: number, now: number, opts: { first?: boolea
     if (j >= 0) {
       const deadline = fixedStartOf(r.items[j], r.dayStartMs)
       if (deadline <= now) {
-        for (let k = i; k < j; k++) r = pushEntry(r, timeoutEntry(r.items[k], deadline))
-        cues.push({ key: 'timeoutNote' })
+        if (!opts.first) {
+          for (let k = i; k < j; k++) r = pushEntry(r, timeoutEntry(r.items[k], deadline))
+          cues.push({ key: 'timeoutNote' })
+        }
         i = j
+        arrived = false
         continue
       }
     }
@@ -362,7 +393,8 @@ export function tick(r: RunState, now: number): Step {
       if (now >= startMs) {
         const key = `fix:${f.uid}`
         if (!run.fired.includes(key)) {
-          cues.push({ key: 'fixedStart', vars: { fixed: f.name, clock: f.startMin } })
+          const arrive = arrivalCue(f)
+          if (arrive) cues.push(arrive)
           run = { ...run, fired: [...run.fired, key] }
         }
         if (run.phase === 'timer') {
@@ -371,11 +403,14 @@ export function tick(r: RunState, now: number): Step {
         }
         return { run, cues }
       }
-      const soonAt = startMs - 5 * MIN
-      const soonKey = `soon:${f.uid}`
-      if (now >= soonAt && !run.fired.includes(soonKey)) {
-        run = { ...run, fired: [...run.fired, soonKey] }
-        if (now - soonAt < LATE_MS) cues.push({ key: 'fixedSoon', vars: { fixed: f.name, minutes: 5 } })
+      // 時刻のまえのお知らせ（ふつうは5分前。でかけるカードは 10・5・1ぷんまえ）。しずかでも話す
+      for (const mark of f.leaving ? [10, 5, 1] : [5]) {
+        const soonAt = startMs - mark * MIN
+        const soonKey = `soon:${f.uid}:${mark}`
+        if (now >= soonAt && !run.fired.includes(soonKey)) {
+          run = { ...run, fired: [...run.fired, soonKey] }
+          if (now - soonAt < LATE_MS) cues.push({ key: f.leaving ? 'leaveSoon' : 'fixedSoon', vars: { fixed: f.name, minutes: mark } })
+        }
       }
     }
   }
@@ -401,7 +436,9 @@ export function tick(r: RunState, now: number): Step {
     if (now >= end) {
       const closed = patchEntry(run, { endedAt: end, result: 'done' })
       const next = enterFrom(closed, run.index + 1, now)
-      return { run: next.run, cues: [{ key: 'end', vars: { name: item.name } }, ...next.cues] }
+      // しずかのじこくカードは、終わりのお知らせをしない
+      const endCue: Cue[] = item.quiet ? [] : [{ key: 'end', vars: { name: item.name } }]
+      return { run: next.run, cues: [...endCue, ...next.cues] }
     }
   }
 

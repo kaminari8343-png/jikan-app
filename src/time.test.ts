@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { clockToKana, formatClock, formatMinOfDay, formatMinutes, formatSpan, funSuffix, inputToMinOfDay, minOfDayToInput, minutesToKana } from './time'
+import { clockToKana, formatClock, formatClockAp, formatMinOfDayAp, formatMinOfDay, formatMinutes, formatSpan, funSuffix, inputToMinOfDay, minOfDayToInput, minutesToKana } from './time'
 import { say } from './phrases.logic'
 
 describe('minutesToKana', () => {
@@ -19,9 +19,14 @@ describe('minutesToKana', () => {
     [20, 'にじゅっぷん'],
     [30, 'さんじゅっぷん'],
     [45, 'よんじゅうごふん'],
-    [60, 'ろくじゅっぷん'],
-    [100, 'ひゃっぷん'],
-    [120, 'ひゃくにじゅっぷん'],
+    [59, 'ごじゅうきゅうふん'],
+    [60, 'いちじかん'],
+    [90, 'いちじかん さんじゅっぷん'],
+    [100, 'いちじかん よんじゅっぷん'],
+    [120, 'にじかん'],
+    [206, 'さんじかん にじゅうろっぷん'],
+    [460, 'ななじかん よんじゅっぷん'],
+    [600, 'じゅうじかん'],
   ]
   it.each(cases)('%i → %s', (n, kana) => expect(minutesToKana(n)).toBe(kana))
 })
@@ -68,5 +73,15 @@ describe('時刻の読み・表示（じこくカード）', () => {
     expect(formatSpan(20)).toBe('20ぷん')
     expect(formatSpan(60)).toBe('1じかん')
     expect(formatSpan(90)).toBe('1じかん30ぷん')
+  })
+})
+
+describe('ごぜん／ごご つきの時刻', () => {
+  it('formatMinOfDayAp / formatClockAp', () => {
+    expect(formatMinOfDayAp(6 * 60 + 30)).toBe('ごぜん6じ30ぷん')
+    expect(formatMinOfDayAp(18 * 60 + 30)).toBe('ごご6じ30ぷん')
+    expect(formatMinOfDayAp(12 * 60)).toBe('ごご12じ')
+    expect(formatMinOfDayAp(0)).toBe('ごぜん12じ')
+    expect(formatClockAp(new Date(2026, 9, 2, 15, 0))).toBe('ごご3じ')
   })
 })

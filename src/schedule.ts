@@ -5,6 +5,10 @@ import { minuteOfDay } from './time'
 const MIN = 60_000
 
 export const isFixed = (it: PlanItem | undefined): boolean => it?.kind === 'fixed'
+/** 1日のおわり（ねる）。endOfDay がなければ、長さ0のじこくカードは1日のおわり（古いデータ） */
+export const isEndOfDay = (it: PlanItem | undefined): boolean => isFixed(it) && (it!.endOfDay ?? it!.minutes === 0)
+/** 時刻だけのじこくカード（おきる・いえをでる）。長さはなく、1日のおわりでもない */
+export const isMoment = (it: PlanItem | undefined): boolean => isFixed(it) && it!.minutes === 0 && !isEndOfDay(it)
 
 /** じこくカードの開始（ms） */
 export const fixedStartOf = (it: PlanItem, dayStartMs: number) => dayStartMs + (it.startMin ?? 0) * MIN
@@ -15,6 +19,8 @@ export interface TimelineRow {
   item: PlanItem
   startMs: number
   endMs: number
+  /** スタート時刻より前のブロックのカード（もう過ぎている）。時刻は あてにならない */
+  past?: boolean
 }
 
 /** じこくカードにはさまれた「あいだの時間」。ふつうのカードを積んでいく */
@@ -34,6 +40,8 @@ export interface Block {
   passed: boolean
   /** ねる（1日のおわり）のあとにあるブロック */
   pastEnd: boolean
+  /** つぎのじこくカードが、スタート時刻より前（もう過ぎたブロック）。警告は出さない */
+  past: boolean
 }
 
 export interface Timeline {
@@ -63,6 +71,7 @@ export function buildTimeline(items: PlanItem[], startAt: number, dayStartMs: nu
     over: false,
     passed: false,
     pastEnd,
+    past: false,
   })
   let block = newBlock(startAt, false)
   let used = 0
@@ -75,13 +84,15 @@ export function buildTimeline(items: PlanItem[], startAt: number, dayStartMs: nu
       block.limitMs = fs
       block.fixed = item
       block.freeMs = fs - (block.startMs + used)
-      block.over = block.rows.length > 0 && block.freeMs < 0
-      block.passed = block.rows.length === 0 && block.freeMs < 0
+      block.past = fs <= startAt
+      block.over = !block.past && block.rows.length > 0 && block.freeMs < 0
+      block.passed = !block.past && block.rows.length === 0 && block.freeMs < 0
+      if (block.past) for (const r of block.rows) r.past = true
       blocks.push(block)
       const row = { item, startMs: fs, endMs: fe }
       rows.set(item.uid, row)
-      endMs = Math.max(endMs, fe)
-      if (item.minutes === 0) pastEnd = true
+      if (fe > startAt) endMs = Math.max(endMs, fe)
+      if (isEndOfDay(item)) pastEnd = true
       // つぎのブロックは、じこくカードが終わってから。スタートより前にはならない
       block = newBlock(Math.max(fe, startAt), pastEnd)
       used = 0
@@ -91,10 +102,16 @@ export function buildTimeline(items: PlanItem[], startAt: number, dayStartMs: nu
       used += item.minutes * MIN
       block.rows.push(row)
       rows.set(item.uid, row)
-      endMs = Math.max(endMs, row.endMs)
+      if (!block.past) endMs = Math.max(endMs, row.endMs)
     }
   }
   blocks.push(block)
+  // 過ぎたブロックのカードは、さいごの時刻に入れない
+  endMs = startAt
+  for (const b of blocks) {
+    if (!b.past) for (const r of b.rows) endMs = Math.max(endMs, r.endMs)
+  }
+  for (const r of rows.values()) if (isFixed(r.item) && r.endMs > startAt) endMs = Math.max(endMs, r.endMs)
   return { blocks, rows, endMs }
 }
 
@@ -122,7 +139,10 @@ export function insertFixed(items: PlanItem[], item: PlanItem): PlanItem[] {
   return next
 }
 
-/** じこくカードにそろえて、名前・時刻などを更新。つくりなおして なくなったカードは外す */
+/**
+ * じこくカードの名前・絵・色・しずか などを、設定のじこくカードにそろえる。
+ * （時刻と長さは、よてい・土台ごとに決めるので そのまま）つくりなおして なくなったカードは外す。
+ */
 export function syncFixed(items: PlanItem[], cards: FixedCard[]): PlanItem[] {
   let changed = false
   const out: PlanItem[] = []
@@ -136,16 +156,21 @@ export function syncFixed(items: PlanItem[], cards: FixedCard[]): PlanItem[] {
       changed = true
       continue
     }
+    const endOfDay = c.endOfDay ?? c.minutes === 0
     const same =
-      it.name === c.name && it.emoji === c.emoji && it.color === c.color && it.minutes === c.minutes && it.startMin === c.startMin
+      it.name === c.name &&
+      it.emoji === c.emoji &&
+      it.color === c.color &&
+      !!it.quiet === !!c.quiet &&
+      !!it.leaving === !!c.leaving &&
+      (it.endOfDay ?? it.minutes === 0) === endOfDay
     if (same) out.push(it)
     else {
       changed = true
-      out.push({ ...it, name: c.name, emoji: c.emoji, color: c.color, minutes: c.minutes, startMin: c.startMin })
+      out.push({ ...it, name: c.name, emoji: c.emoji, color: c.color, quiet: !!c.quiet, leaving: !!c.leaving, endOfDay })
     }
   }
-  const base = changed ? out : items
-  return sortFixedSlots(base)
+  return sortFixedSlots(changed ? out : items)
 }
 
 /** ふつうのカードを、ブロックの おわりに入れる（fixedUid は そのブロックをおわらせるじこくカード。null は さいごのブロック） */
@@ -159,7 +184,7 @@ export function insertAtBlockEnd(items: PlanItem[], item: PlanItem, fixedUid: st
 /** タップで入れるとき: 入りきる いちばん早いブロックへ。どこも入らなければ、いちばん早いブロックへ（赤くなる） */
 export function insertNormalSmart(items: PlanItem[], item: PlanItem, startAt: number, dayStartMs: number): PlanItem[] {
   const tl = buildTimeline(items, startAt, dayStartMs)
-  const usable = tl.blocks.filter((b) => !b.pastEnd)
+  const usable = tl.blocks.filter((b) => !b.pastEnd && !b.past)
   const fits = usable.find((b) => b.freeMs === null || b.freeMs - item.minutes * MIN >= 0)
   const target = fits ?? usable[0]
   return insertAtBlockEnd(items, item, target?.fixed?.uid ?? null)
@@ -176,23 +201,34 @@ export interface Sector {
   active?: boolean
 }
 
-/** 時間割 → 扇形（カード・じこくカード・あまった じゆうじかん） */
-export function timelineSectors(tl: Timeline, activeUid?: string): Sector[] {
-  const out: Sector[] = []
+const HALF_DAY = 12 * 60 * MIN
+
+/** 文字盤は12時間ぶん。from から先の12時間に入る部分だけ、扇形にする */
+function windowSector(s: Sector, from: number): Sector | null {
+  const startMs = Math.max(s.startMs, from)
+  const endMs = Math.min(s.endMs, from + HALF_DAY)
+  return endMs > startMs ? { ...s, startMs, endMs } : null
+}
+
+/** 時間割 → 扇形（カード・じこくカード・あまった じゆうじかん）。from（ms）から先の12時間ぶん */
+export function timelineSectors(tl: Timeline, from: number, activeUid?: string): Sector[] {
+  const raw: Sector[] = []
   for (const b of tl.blocks) {
-    for (const r of b.rows) {
-      out.push({ startMs: r.startMs, endMs: r.endMs, color: r.item.color, kind: 'card', active: r.item.uid === activeUid })
-    }
-    if (b.limitMs !== null && b.freeMs !== null && b.freeMs > 0) {
-      const used = b.rows.length ? b.rows[b.rows.length - 1].endMs : b.startMs
-      out.push({ startMs: used, endMs: b.limitMs, color: '#bfe8d0', kind: 'free' })
+    if (!b.past) {
+      for (const r of b.rows) {
+        raw.push({ startMs: r.startMs, endMs: r.endMs, color: r.item.color, kind: 'card', active: r.item.uid === activeUid })
+      }
+      if (b.limitMs !== null && b.freeMs !== null && b.freeMs > 0) {
+        const used = b.rows.length ? b.rows[b.rows.length - 1].endMs : b.startMs
+        raw.push({ startMs: used, endMs: b.limitMs, color: '#bfe8d0', kind: 'free' })
+      }
     }
     if (b.fixed && b.fixed.minutes > 0) {
       const r = tl.rows.get(b.fixed.uid)!
-      out.push({ startMs: r.startMs, endMs: r.endMs, color: r.item.color, kind: 'fixed', active: r.item.uid === activeUid })
+      raw.push({ startMs: r.startMs, endMs: r.endMs, color: r.item.color, kind: 'fixed', active: r.item.uid === activeUid })
     }
   }
-  return out
+  return raw.map((s) => windowSector(s, from)).filter((s): s is Sector => s !== null)
 }
 
 /** じっこう中の時計の扇形: いまから先の予定。いまのカードを強調 */
@@ -201,7 +237,7 @@ export function runSectors(r: RunState, now: number): Sector[] {
   const item = r.items[r.index]
   const rest = (from: number, cursor: number) => {
     const tl = buildTimeline(r.items.slice(from), cursor, r.dayStartMs)
-    return timelineSectors(tl)
+    return timelineSectors(tl, cursor)
   }
   if (r.phase === 'timer') {
     const elapsed = r.accumMs + (r.runningSince != null ? now - r.runningSince : 0)

@@ -36,6 +36,10 @@ export const phrases = {
   fixedStart: '{time}だよ。{fixed}の じかんだよ',
   /** じこくカードの5分前 */
   fixedSoon: 'あと{min}で {fixed}だよ',
+  /** でかけるカード（いえをでる）の、10・5・1ぷんまえ。{fixed} は カードの名前（いえをでる） */
+  leaveSoon: 'あと{min}で {fixed}よ',
+  /** でかけるカードの時刻 */
+  leaveNow: 'いってらっしゃい！',
   /** じゆうじかんがはじまったとき */
   freeStart: 'じゆうじかんだよ。{fixed}まで あと{min}だよ',
   /** じかんぎれのカードがあったとき（ふりかえりのあとに話す） */

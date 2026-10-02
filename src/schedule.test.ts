@@ -42,10 +42,15 @@ describe('buildTimeline（あいだのブロック）', () => {
     expect(tl.blocks[0].freeMs).toBe(-10 * MIN)
   })
 
-  it('じこくカードの時刻が もうすぎているとき（カードなし）は passed', () => {
+  it('じこくカードの時刻が スタートより前（もう過ぎたブロック）は past。警告は出さない', () => {
     const tl = buildTimeline([dinner], at(19, 0), DAY)
-    expect(tl.blocks[0].passed).toBe(true)
+    expect(tl.blocks[0].past).toBe(true)
+    expect(tl.blocks[0].passed).toBe(false)
     expect(tl.blocks[0].over).toBe(false)
+    const tl3 = buildTimeline([normal('x', 60), dinner], at(19, 0), DAY)
+    expect(tl3.blocks[0].past).toBe(true)
+    expect(tl3.blocks[0].over).toBe(false)
+    expect(tl3.rows.get('x')?.past).toBe(true)
     // ブロックのあとは、スタートより前にならない
     const tl2 = buildTimeline([dinner, normal('a', 10)], at(19, 30), DAY)
     expect(tl2.rows.get('a')?.startMs).toBe(at(19, 30))
@@ -83,17 +88,18 @@ describe('列の操作', () => {
     expect(sortFixedSlots(ok)).toBe(ok)
   })
 
-  it('syncFixed: 設定で変えた名前・時刻が反映され、けしたカードは外れる。時刻が入れかわれば並びなおす', () => {
+  it('syncFixed: 名前・絵・しずか などは設定にそろう。時刻・長さは、そのまま。けしたカードは外れる', () => {
     const cards: FixedCard[] = [
-      { id: 'ゆうごはん', name: 'ばんごはん', emoji: '🍚', color: '#111', startMin: 20 * 60, minutes: 40 },
-      { id: 'おふろ', name: 'おふろ', emoji: '', color: '#999', startMin: 19 * 60 + 30, minutes: 30 },
+      { id: 'ゆうごはん', name: 'ばんごはん', emoji: '🍚', color: '#111', startMin: 20 * 60, minutes: 40, quiet: true },
+      { id: 'おふろ', name: 'おふろ', emoji: '', color: '#999', startMin: 19 * 60 + 30, minutes: 30, leaving: true },
     ]
     const items = [normal('a', 5), dinner, bath, bed]
     const out = syncFixed(items, cards)
-    expect(out.map((i) => i.name)).toEqual(['a', 'おふろ', 'ばんごはん']) // ねる は けされた
-    expect(out[2]).toMatchObject({ startMin: 1200, minutes: 40, emoji: '🍚' })
+    expect(out.map((i) => i.name)).toEqual(['a', 'ばんごはん', 'おふろ']) // ねる は けされた
+    expect(out[1]).toMatchObject({ emoji: '🍚', color: '#111', quiet: true, startMin: 18 * 60 + 30, minutes: 30 }) // 時刻は そのまま
+    expect(out[2]).toMatchObject({ leaving: true, quiet: false })
     // 変化がなければ同じ配列を返す
-    const same = syncFixed([normal('a', 5), bath], cards)
+    const same = syncFixed(out, cards)
     expect(syncFixed(same, cards)).toBe(same)
   })
 
@@ -129,7 +135,7 @@ describe('列の操作', () => {
 describe('時計の扇形', () => {
   it('よてい: カード・じこくカード・あまりの じゆうじかん', () => {
     const tl = buildTimeline([normal('a', 15), dinner], at(18, 0), DAY)
-    const s = timelineSectors(tl)
+    const s = timelineSectors(tl, at(18, 0))
     expect(s.map((x) => [x.kind, x.startMs, x.endMs])).toEqual([
       ['card', at(18, 0), at(18, 15)],
       ['free', at(18, 15), at(18, 30)],
