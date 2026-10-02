@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState } from 'react'
-import type { RunState } from '../types'
+import type { Rating, RunState } from '../types'
 import { say } from '../phrases.logic'
 import { speak, speakNow, stopSpeaking } from '../speech'
 import { formatMmSs } from '../time'
 import {
   EXTEND_MS,
-  advance,
   currentItem,
   dueEvents,
   durationMs,
   elapsedMs,
   extend,
+  finishCard,
   isRunning,
   markFired,
   nextItem,
   pause,
+  rateCard,
   remainingMs,
   resume,
 } from '../runner'
@@ -36,10 +37,12 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
     onChange(next)
   }
 
-  useWakeLock(!run.finished)
+  const quit = () => window.confirm('やめて もどる？') && (stopSpeaking(), onExit())
+
+  useWakeLock(run.phase !== 'done')
 
   useEffect(() => {
-    if (run.finished) return
+    if (run.phase !== 'timer') return
     const tick = () => {
       let r = ref.current
       const now = Date.now()
@@ -47,17 +50,10 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
       if (!item || !isRunning(r)) return
 
       if (elapsedMs(r, now) >= durationMs(r)) {
-        // カード終了
-        const nxt = nextItem(r)
+        // 時間がきた。⭕️❌をえらぶまで、つぎのカードははじめない
         speak(say('end', { name: item.name }))
-        r = advance(r, now)
-        if (nxt) {
-          speak(say('next', { next: nxt.name }))
-          announceStart(nxt.name, nxt.minutes)
-        } else {
-          speak(say('allDone'))
-        }
-        apply(r)
+        speak(say('ask', { name: item.name }))
+        apply(finishCard(r, 'done', now))
         return
       }
 
@@ -81,9 +77,9 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
       document.removeEventListener('visibilitychange', onVisible)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [run.finished])
+  }, [run.phase])
 
-  if (run.finished) {
+  if (run.phase === 'done') {
     return (
       <main className="runner runner--done">
         <div className="done">
@@ -105,6 +101,50 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
 
   const item = currentItem(run)!
   const next = nextItem(run)
+
+  if (run.phase === 'rate') {
+    const rate = (rating: Rating) => {
+      speakNow(say(rating === 'good' ? 'rateGood' : 'rateBad'))
+      if (next) {
+        speak(say('next', { next: next.name }))
+        announceStart(next.name, next.minutes)
+      } else {
+        speak(say('allDone'))
+      }
+      apply(rateCard(run, rating, Date.now()))
+    }
+    return (
+      <main className="runner" style={{ background: `color-mix(in srgb, ${item.color} 28%, #fff6e5)` }}>
+        <div className="runner__top">
+          <span className="runner__count">
+            {run.index + 1} / {run.items.length}
+          </span>
+          <button type="button" className="icon-btn" aria-label="やめる" onClick={quit}>
+            🏠
+          </button>
+        </div>
+        <div className="rate">
+          <div className="rate__card" style={{ background: item.color }}>
+            <span className="rate__emoji">{item.emoji}</span>
+            <span className="rate__name">{item.name}</span>
+          </div>
+          <h1 className="rate__title">どうだった？</h1>
+          <p className="rate__sub">じぶんで つけてみよう</p>
+          <div className="rate__buttons">
+            <button type="button" className="rate-btn rate-btn--good" onClick={() => rate('good')}>
+              <span>⭕</span>
+              <small>まる</small>
+            </button>
+            <button type="button" className="rate-btn rate-btn--bad" onClick={() => rate('bad')}>
+              <span>❌</span>
+              <small>ばつ</small>
+            </button>
+          </div>
+        </div>
+      </main>
+    )
+  }
+
   const now = Date.now()
   const total = durationMs(run)
   const remaining = remainingMs(run, now)
@@ -113,11 +153,10 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
   const minLeft = Math.ceil(remaining / 60_000)
 
   const skip = () => {
-    const nxt = nextItem(run)
+    // スキップしたカードも、⭕️❌をつけられる
     stopSpeaking()
-    if (nxt) announceStart(nxt.name, nxt.minutes)
-    else speakNow(say('allDone'))
-    apply(advance(run, Date.now()))
+    speak(say('ask', { name: item.name }))
+    apply(finishCard(run, 'skipped', Date.now()))
   }
 
   return (
@@ -130,7 +169,7 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
           type="button"
           className="icon-btn"
           aria-label="やめる"
-          onClick={() => window.confirm('やめて もどる？') && (stopSpeaking(), onExit())}
+          onClick={quit}
         >
           🏠
         </button>

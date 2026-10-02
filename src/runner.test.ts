@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { advance, dueEvents, elapsedMs, extend, markFired, pause, remainingMs, resume, scheduleEvents, startRun } from './runner'
+import { abortRun, dueEvents, elapsedMs, extend, finishCard, markFired, normalizeRun, pause, rateCard, remainingMs, resume, scheduleEvents, startRun } from './runner'
 import type { PlanItem } from './types'
 
 const item = (name: string, minutes: number): PlanItem => ({ uid: name, cardId: name, name, emoji: '', color: '', minutes })
@@ -56,13 +56,88 @@ describe('お知らせ', () => {
   })
 })
 
-describe('つぎのカード', () => {
-  it('つぎへ進むと時間がリセット。最後は finished', () => {
-    let r = startRun([item('a', 5), item('b', 10)], T0)
-    r = advance(r, T0 + 5 * MIN)
+describe('ふりかえり（⭕️❌）の流れ', () => {
+  const plan = () => startRun([item('a', 5), item('b', 10)], T0, 'sess-1')
+
+  it('スタートすると、1まいめの記録ができる', () => {
+    const r = plan()
+    expect(r.phase).toBe('timer')
+    expect(r.session.entries).toHaveLength(1)
+    expect(r.session.entries[0]).toMatchObject({ name: 'a', plannedMinutes: 5, startedAt: T0, endedAt: null, result: null, rating: null, extensions: 0 })
+  })
+
+  it('時間がきたら⭕️❌まち。評価するまで、つぎのカードは はじまらない', () => {
+    let r = finishCard(plan(), 'done', T0 + 5 * MIN)
+    expect(r.phase).toBe('rate')
+    expect(r.index).toBe(0)
+    expect(r.runningSince).toBeNull()
+    expect(r.session.entries).toHaveLength(1)
+    expect(r.session.entries[0]).toMatchObject({ result: 'done', endedAt: T0 + 5 * MIN, rating: null })
+    // まっているあいだは時間が進まない
+    expect(elapsedMs(r, T0 + 60 * MIN)).toBe(0)
+    r = rateCard(r, 'good', T0 + 7 * MIN)
+    expect(r.phase).toBe('timer')
     expect(r.index).toBe(1)
-    expect(elapsedMs(r, T0 + 8 * MIN)).toBe(3 * MIN)
-    r = advance(r, T0 + 15 * MIN)
-    expect(r.finished).toBe(true)
+    expect(r.session.entries[0].rating).toBe('good')
+    // つぎのカードは、評価をおした時刻からはじまる
+    expect(r.session.entries[1]).toMatchObject({ name: 'b', startedAt: T0 + 7 * MIN, endedAt: null })
+    expect(elapsedMs(r, T0 + 9 * MIN)).toBe(2 * MIN)
+  })
+
+  it('タブが止まっていて気づくのが遅れても、終了時刻は ほんとうの時刻で記録する', () => {
+    const r = finishCard(plan(), 'done', T0 + 30 * MIN)
+    expect(r.session.entries[0].endedAt).toBe(T0 + 5 * MIN)
+  })
+
+  it('一時停止をはさんだ終了時刻', () => {
+    let r = pause(plan(), T0 + 2 * MIN)
+    r = resume(r, T0 + 10 * MIN) // 8ふん止めた
+    r = finishCard(r, 'done', T0 + 13 * MIN)
+    expect(r.session.entries[0].endedAt).toBe(T0 + 13 * MIN)
+  })
+
+  it('スキップしたカードも評価できる', () => {
+    let r = finishCard(plan(), 'skipped', T0 + 1 * MIN)
+    expect(r.phase).toBe('rate')
+    expect(r.session.entries[0]).toMatchObject({ result: 'skipped', endedAt: T0 + 1 * MIN })
+    r = rateCard(r, 'bad', T0 + 2 * MIN)
+    expect(r.session.entries[0].rating).toBe('bad')
+    expect(r.index).toBe(1)
+  })
+
+  it('+5ふん をおした回数を記録する', () => {
+    let r = plan()
+    r = extend(r, T0 + 1 * MIN)
+    r = extend(r, T0 + 2 * MIN)
+    expect(r.session.entries[0].extensions).toBe(2)
+    // 予定の時間は、のばす前のまま
+    expect(r.session.entries[0].plannedMinutes).toBe(5)
+  })
+
+  it('さいごのカードを評価すると、おしまい（記録も finished）', () => {
+    let r = rateCard(finishCard(plan(), 'done', T0 + 5 * MIN), 'good', T0 + 5 * MIN)
+    r = rateCard(finishCard(r, 'done', T0 + 15 * MIN), 'bad', T0 + 16 * MIN)
+    expect(r.phase).toBe('done')
+    expect(r.session.status).toBe('finished')
+    expect(r.session.entries.map((e) => e.rating)).toEqual(['good', 'bad'])
+  })
+
+  it('評価まちでないときに rateCard しても何も変わらない', () => {
+    const r = plan()
+    expect(rateCard(r, 'good', T0 + MIN)).toBe(r)
+  })
+
+  it('やめると「とちゅうでやめた」。さいごまで終われば finished', () => {
+    expect(abortRun(plan()).status).toBe('aborted')
+    expect(abortRun(finishCard(plan(), 'done', T0 + 5 * MIN)).status).toBe('aborted')
+    const done = rateCard(finishCard(rateCard(finishCard(plan(), 'done', T0), 'good', T0), 'done', T0), 'good', T0)
+    expect(abortRun(done).status).toBe('finished')
+  })
+
+  it('古い形式の保存データは捨てる', () => {
+    expect(normalizeRun(null)).toBeNull()
+    expect(normalizeRun({ items: [], index: 0, finished: false })).toBeNull()
+    const r = plan()
+    expect(normalizeRun(JSON.parse(JSON.stringify(r)))).toEqual(r)
   })
 })
