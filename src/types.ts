@@ -16,6 +16,23 @@ export interface PlanItem {
   name: string
   emoji: string
   color: string
+  /** じこくカードでは「長さ」（分）。0 は長さなし（1日のおわり） */
+  minutes: number
+  /** じこくカード（時刻が決まった予定）なら 'fixed'。ふつうのカードは省略 */
+  kind?: 'normal' | 'fixed'
+  /** じこくカードの開始時刻（0:00からの分） */
+  startMin?: number
+}
+
+/** じこくカード（親が設定画面でつくる、時刻が決まった予定） */
+export interface FixedCard {
+  id: string
+  name: string
+  emoji: string
+  color: string
+  /** 開始時刻（0:00からの分）。例: 18:30 → 1110 */
+  startMin: number
+  /** 長さ（分）。0 は長さなし＝1日のおわり（ねる） */
   minutes: number
 }
 
@@ -23,6 +40,8 @@ export interface SavedPlan {
   id: string
   name: string
   items: Omit<PlanItem, 'uid'>[]
+  /** スタート時刻（0:00からの分）。null / 省略は「いま」 */
+  startMin?: number | null
 }
 
 export interface Settings {
@@ -44,8 +63,14 @@ export interface HistoryEntry {
   /** 実際の開始・終了（Date.now の値）。終了は、途中でやめたカードだけ null */
   startedAt: number
   endedAt: number | null
-  /** さいごまでやった / スキップ。まだ途中なら null */
-  result: 'done' | 'skipped' | null
+  /**
+   * done: さいごまでやった / skipped: スキップ /
+   * cutoff: じこくカードの時刻になって、とちゅうで止めた /
+   * timeout: じかんぎれ（そのブロックで、はじめられなかった） / null: まだ途中
+   */
+  result: 'done' | 'skipped' | 'cutoff' | 'timeout' | null
+  /** カードの種類。省略（古い記録）はふつうのカード。fixed=じこくカード / free=じゆうじかん */
+  kind?: 'normal' | 'fixed' | 'free'
   /** 「+5ふん」を押した回数 */
   extensions: number
   /** じぶんでつけた⭕️／❌。まだなら null */
@@ -63,12 +88,13 @@ export interface HistorySession {
 
 /**
  * じっこう中の状態（localStorage に保存して、リロードしても続けられる）
- * phase: timer = タイマー中 / rate = ⭕️❌をえらぶ画面 / done = ぜんぶおわった
+ * phase: timer = ふつうのカードのタイマー中 / rate = ⭕️❌をえらぶ画面 /
+ *        free = じゆうじかん（つぎのじこくカードまで）/ fixed = じこくカードの最中 / done = おわった
  */
 export interface RunState {
   items: PlanItem[]
   index: number
-  /** いまのカードで、一時停止までに経過したミリ秒 */
+  /** いま（items[index]）のカードで、一時停止までに経過したミリ秒 */
   accumMs: number
   /** 動いているときの再開時刻（Date.now）。止まっているときは null */
   runningSince: number | null
@@ -76,7 +102,11 @@ export interface RunState {
   extraMs: number
   /** もう話したお知らせ */
   fired: string[]
-  phase: 'timer' | 'rate' | 'done'
-  /** この回の記録。entries[i] が items[i] に対応する */
+  phase: 'timer' | 'rate' | 'free' | 'fixed' | 'done'
+  /** この回の記録 */
   session: HistorySession
+  /** いま進んでいる記録（session.entries の番号）。まだなければ -1 */
+  cur: number
+  /** その日の 0:00（Date.now の値）。じこくカードの時刻の基準 */
+  dayStartMs: number
 }

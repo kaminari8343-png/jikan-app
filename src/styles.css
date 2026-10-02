@@ -983,3 +983,242 @@ input {
 .chip--done {
   background: #dff5e8;
 }
+
+/* 1日のスケジュール: じこくカード・ブロック・じゆうじかん */
+.start-time {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 6px 12px;
+}
+.start-time__label {
+  font-size: 20px;
+}
+.stepper__value--wide {
+  min-width: 128px;
+}
+.stepper__value small {
+  font-size: 14px;
+  color: var(--ink-soft);
+}
+.plan-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.plan-row--fixed {
+  touch-action: auto;
+  cursor: default;
+  border: 4px dashed rgba(90, 67, 38, 0.55);
+  padding-left: 12px;
+}
+.plan-row__pin {
+  font-size: 26px;
+  line-height: 1;
+}
+.fixed-len {
+  font-size: 20px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 20px;
+  padding: 4px 12px;
+}
+.plan-row--late {
+  outline: 4px solid #ff6b6b;
+}
+.block-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: #e3f6ea;
+  border: 3px solid #bfe8d0;
+}
+.block-footer--over {
+  background: #ffe3e0;
+  border-color: #ff6b6b;
+  color: #c0392b;
+}
+.block-footer--exact {
+  background: #fff6d6;
+  border-color: #ffd84d;
+}
+.block-footer--drop {
+  outline: 4px solid var(--accent);
+}
+.block-footer__icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.block-footer__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.block-footer__text b {
+  font-size: 20px;
+}
+.block-footer__text small {
+  font-size: 15px;
+  opacity: 0.85;
+}
+.block-note {
+  margin: 0;
+  text-align: center;
+  font-size: 18px;
+}
+.block-note--over {
+  color: #c0392b;
+}
+.palette__title--fixed {
+  margin-top: 14px;
+}
+.card--fixed {
+  position: relative;
+  border: 4px dashed rgba(90, 67, 38, 0.55);
+}
+.card__pin {
+  position: absolute;
+  top: 2px;
+  right: 4px;
+  font-size: 18px;
+}
+.card__sub {
+  font-size: 13px;
+  opacity: 0.8;
+}
+.card-btn--used {
+  opacity: 0.45;
+  touch-action: auto;
+}
+.time-input {
+  height: 56px;
+  border: 3px solid #e8d3ae;
+  border-radius: 16px;
+  padding: 0 14px;
+  font-size: 26px;
+  background: #fff;
+  color: var(--ink);
+  width: 100%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.preset__main small {
+  font-size: 14px;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+/* じっこう中: 時計 + じゆうじかん・じこくカード */
+.runner__body {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.runner__body .pie {
+  width: min(78vw, 42vh, 460px);
+}
+.runner__clock {
+  width: min(40vw, 24vh, 250px);
+  min-width: 130px;
+}
+@media (orientation: landscape) and (min-width: 800px) {
+  .runner__body {
+    flex-direction: row;
+    gap: 36px;
+  }
+  .runner__body .pie {
+    width: min(52vh, 460px);
+  }
+  .runner__clock {
+    width: min(40vh, 300px);
+  }
+}
+.runner__until {
+  margin: 0;
+  padding: 4px 16px;
+  background: #fff;
+  border-radius: 20px;
+  box-shadow: var(--shadow);
+  font-size: 18px;
+}
+.runner__hint {
+  margin: 0;
+  font-size: 22px;
+  color: var(--ink-soft);
+}
+.runner__notice {
+  margin: 0;
+  padding: 8px 16px;
+  background: #fff3cd;
+  border: 3px solid #ffd84d;
+  border-radius: 16px;
+  font-size: 20px;
+  text-align: center;
+}
+.ctrl--blocked {
+  opacity: 0.45;
+}
+.next-chip small {
+  font-size: 14px;
+  margin-left: 6px;
+  opacity: 0.75;
+}
+.fixed-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: #fff3cd;
+  border: 4px solid #ffb84d;
+  border-radius: 20px;
+  font-size: clamp(18px, 4vw, 26px);
+  animation: pulse 1.2s ease-in-out infinite alternate;
+}
+.fixed-banner span {
+  font-size: 30px;
+}
+@keyframes pulse {
+  to {
+    transform: scale(1.03);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fixed-banner {
+    animation: none;
+  }
+}
+
+/* りれき: じこくカード・じゆうじかん・じかんぎれ */
+.entry--fixed {
+  background: #fffaf0;
+}
+.entry--free {
+  background: #f0faf4;
+}
+.entry--timeout {
+  opacity: 0.8;
+  background: #f6f1ea;
+}
+.chip--free {
+  background: #dff5e8;
+}
+.chip--fixed {
+  background: #ffeccb;
+}
+
+.preset__main--static .preset__items {
+  flex: 0 0 auto;
+}
+.preset__main--static b {
+  flex: 1;
+}

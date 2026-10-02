@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatClock, formatMinutes, funSuffix, minutesToKana } from './time'
+import { clockToKana, formatClock, formatMinOfDay, formatMinutes, formatSpan, funSuffix, inputToMinOfDay, minOfDayToInput, minutesToKana } from './time'
 import { say } from './phrases.logic'
 
 describe('minutesToKana', () => {
@@ -45,5 +45,28 @@ describe('セリフ', () => {
   })
   it('つぎは', () => {
     expect(say('next', { next: 'おやつ' })).toBe('つぎは おやつ だね')
+  })
+})
+
+describe('時刻の読み・表示（じこくカード）', () => {
+  it('clockToKana', () => {
+    expect(clockToKana(18 * 60 + 30)).toBe('ろくじ さんじゅっぷん')
+    expect(clockToKana(19 * 60)).toBe('しちじ')
+    expect(clockToKana(0)).toBe('じゅうにじ')
+    expect(clockToKana(12 * 60 + 5)).toBe('じゅうにじ ごふん')
+    expect(clockToKana(21 * 60 + 15)).toBe('くじ じゅうごふん')
+  })
+  it('formatMinOfDay / input 変換', () => {
+    expect(formatMinOfDay(18 * 60 + 30)).toBe('6じ30ぷん')
+    expect(formatMinOfDay(21 * 60)).toBe('9じ')
+    expect(minOfDayToInput(18 * 60 + 5)).toBe('18:05')
+    expect(inputToMinOfDay('18:05')).toBe(18 * 60 + 5)
+    expect(inputToMinOfDay('24:00')).toBeNull()
+    expect(inputToMinOfDay('')).toBeNull()
+  })
+  it('formatSpan', () => {
+    expect(formatSpan(20)).toBe('20ぷん')
+    expect(formatSpan(60)).toBe('1じかん')
+    expect(formatSpan(90)).toBe('1じかん30ぷん')
   })
 })

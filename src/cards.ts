@@ -1,4 +1,4 @@
-import type { CardDef } from './types'
+import type { CardDef, FixedCard } from './types'
 
 export const PRESET_CARDS: CardDef[] = [
   { id: 'rest', name: 'きゅうけい', emoji: '🛋️', color: '#8fd3b6', minutes: 10 },
@@ -17,3 +17,10 @@ export const CARD_EMOJIS = [
 
 export const MIN_MINUTES = 1
 export const MAX_MINUTES = 120
+
+/** はじめから入っている じこくカード（親が設定画面で、ふやしたり直したりできる） */
+export const DEFAULT_FIXED_CARDS: FixedCard[] = [
+  { id: 'dinner', name: 'ゆうごはん', emoji: '🍚', color: '#f4a259', startMin: 18 * 60 + 30, minutes: 30 },
+  { id: 'bath', name: 'おふろ', emoji: '🛁', color: '#5bc0eb', startMin: 19 * 60 + 30, minutes: 30 },
+  { id: 'bed', name: 'ねる', emoji: '😴', color: '#8d7be0', startMin: 21 * 60, minutes: 0 },
+]
