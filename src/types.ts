@@ -32,7 +32,39 @@ export interface Settings {
   volume: number
 }
 
-/** じっこう中の状態（localStorage に保存して、リロードしても続けられる） */
+export type Rating = 'good' | 'bad'
+
+/** 1枚のカードの記録 */
+export interface HistoryEntry {
+  name: string
+  emoji: string
+  color: string
+  /** 予定の時間（分）。「+5ふん」で延ばす前の値 */
+  plannedMinutes: number
+  /** 実際の開始・終了（Date.now の値）。終了は、途中でやめたカードだけ null */
+  startedAt: number
+  endedAt: number | null
+  /** さいごまでやった / スキップ。まだ途中なら null */
+  result: 'done' | 'skipped' | null
+  /** 「+5ふん」を押した回数 */
+  extensions: number
+  /** じぶんでつけた⭕️／❌。まだなら null */
+  rating: Rating | null
+}
+
+/** 「スタート」を押してから、おわる（またはやめる）までの1回分 */
+export interface HistorySession {
+  id: string
+  startedAt: number
+  /** running: じっこう中 / finished: ぜんぶやりおえた / aborted: とちゅうでやめた */
+  status: 'running' | 'finished' | 'aborted'
+  entries: HistoryEntry[]
+}
+
+/**
+ * じっこう中の状態（localStorage に保存して、リロードしても続けられる）
+ * phase: timer = タイマー中 / rate = ⭕️❌をえらぶ画面 / done = ぜんぶおわった
+ */
 export interface RunState {
   items: PlanItem[]
   index: number
@@ -44,5 +76,7 @@ export interface RunState {
   extraMs: number
   /** もう話したお知らせ */
   fired: string[]
-  finished: boolean
+  phase: 'timer' | 'rate' | 'done'
+  /** この回の記録。entries[i] が items[i] に対応する */
+  session: HistorySession
 }

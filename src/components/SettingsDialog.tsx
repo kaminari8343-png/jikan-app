@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { CardDef, Settings } from '../types'
+import type { CardDef, HistorySession, Settings } from '../types'
+import { buildBackup, dateKey, mergeHistory, parseBackup } from '../history'
 import { DEFAULT_SETTINGS, isSpeechSupported, speakTest } from '../speech'
 import { say } from '../phrases.logic'
 import { SAMPLE } from '../phrases'
@@ -22,17 +23,47 @@ const TESTS: { label: string; text: () => string }[] = [
 export function SettingsDialog({
   settings,
   onChange,
+  history,
+  onImportHistory,
   customCards,
   onDeleteCard,
   onClose,
 }: {
   settings: Settings
   onChange: (s: Settings) => void
+  history: HistorySession[]
+  onImportHistory: (h: HistorySession[]) => void
   customCards: CardDef[]
   onDeleteCard: (id: string) => void
   onClose: () => void
 }) {
   const [voices, setVoices] = useState<string[]>([])
+  const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const exportHistory = () => {
+    const blob = new Blob([buildBackup(history)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `jikan-kiroku-${dateKey(Date.now())}.json`
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 1000)
+    setBackupMsg({ ok: true, text: `${history.length}かい ぶんの きろくを ほぞんしたよ` })
+  }
+
+  const importHistory = async (file: File | undefined) => {
+    if (!file) return
+    const parsed = parseBackup(await file.text())
+    if (!parsed.ok) return setBackupMsg({ ok: false, text: parsed.error })
+    const { merged, added } = mergeHistory(history, parsed.sessions)
+    onImportHistory(merged)
+    setBackupMsg({
+      ok: true,
+      text: `${added}かい ぶん よみこんだよ${parsed.skipped ? `（よめない きろくが ${parsed.skipped}こ あったよ）` : ''}`,
+    })
+  }
   useEffect(() => {
     if (!isSpeechSupported()) return
     const read = () =>
@@ -76,6 +107,29 @@ export function SettingsDialog({
           ))}
         </div>
         <small>セリフは src/phrases.ts で かえられます</small>
+      </div>
+
+      <div className="field">
+        <span>きろくの バックアップ</span>
+        <div className="test-grid">
+          <button type="button" className="big-btn big-btn--sub" onClick={exportHistory}>
+            💾 きろくを ほぞん（かきだし）
+          </button>
+          <label className="big-btn big-btn--sub file-btn">
+            📂 きろくを よみこむ
+            <input
+              type="file"
+              accept="application/json,.json"
+              hidden
+              onChange={(e) => {
+                void importHistory(e.target.files?.[0])
+                e.target.value = ''
+              }}
+            />
+          </label>
+        </div>
+        {backupMsg && <small className={backupMsg.ok ? 'ok' : 'warn'}>{backupMsg.text}</small>}
+        <small>Safariの データを けしたり、たんまつを かえるときのために ときどき ほぞんしてね</small>
       </div>
 
       {customCards.length > 0 && (

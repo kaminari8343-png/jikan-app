@@ -10,11 +10,14 @@ import { useNow } from './hooks'
 import { DEFAULT_SETTINGS, setSpeechSettings, unlockSpeech } from './speech'
 import { useStored } from './storage'
 import { formatClock } from './time'
-import { startRun } from './runner'
-import type { CardDef, PlanItem, RunState, SavedPlan, Settings } from './types'
+import { abortRun, normalizeRun, startRun } from './runner'
+import { upsertSession } from './history'
+import { HistoryScreen } from './components/HistoryScreen'
+import type { CardDef, HistorySession, PlanItem, RunState, SavedPlan, Settings } from './types'
 import { load, save } from './storage'
 
 type Dialog = null | 'card' | 'presets' | 'settings'
+type Screen = 'plan' | 'history'
 
 export function App() {
   const now = useNow(1000)
@@ -24,10 +27,18 @@ export function App() {
   const [settings, setSettings] = useStored<Settings>('settings', DEFAULT_SETTINGS)
   const [dialog, setDialog] = useState<Dialog>(null)
   // じっこう中の状態は、リロードしても続けられるよう保存する
-  const [run, setRun] = useState<RunState | null>(() => load<RunState | null>('run', null))
+  const [run, setRun] = useState<RunState | null>(() => normalizeRun(load<unknown>('run', null)))
+  const [history, setHistory] = useStored<HistorySession[]>('history', [])
+  const [screen, setScreen] = useState<Screen>('plan')
   const updateRun = (r: RunState | null) => {
     setRun(r)
     save('run', r)
+    // 記録は、状態が変わるたびにその回のぶんを更新して残す
+    if (r) setHistory((h) => upsertSession(h, r.session))
+  }
+  const exitRun = () => {
+    if (run) setHistory((h) => upsertSession(h, abortRun(run)))
+    updateRun(null)
   }
 
   useEffect(() => setSpeechSettings(settings), [settings])
@@ -41,15 +52,22 @@ export function App() {
     updateRun(startRun(plan, Date.now()))
   }
 
-  if (run) return <Runner run={run} onChange={updateRun} onExit={() => updateRun(null)} />
+  if (run) return <Runner run={run} onChange={updateRun} onExit={exitRun} />
+
+  if (screen === 'history') return <HistoryScreen sessions={history} now={now} onBack={() => setScreen('plan')} />
 
   return (
     <main className="app">
       <header className="top">
         <h1>きょうのよてい</h1>
-        <button type="button" className="icon-btn" aria-label="せってい" onClick={() => setDialog('settings')}>
-          ⚙️
-        </button>
+        <div className="top__buttons">
+          <button type="button" className="pill-btn" onClick={() => setScreen('history')}>
+            📅 りれき
+          </button>
+          <button type="button" className="icon-btn" aria-label="せってい" onClick={() => setDialog('settings')}>
+            ⚙️
+          </button>
+        </div>
       </header>
 
       <div className="layout">
@@ -107,6 +125,8 @@ export function App() {
         <SettingsDialog
           settings={settings}
           onChange={setSettings}
+          history={history}
+          onImportHistory={setHistory}
           customCards={customCards}
           onDeleteCard={(id) => setCustomCards(customCards.filter((c) => c.id !== id))}
           onClose={() => setDialog(null)}

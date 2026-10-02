@@ -1,11 +1,50 @@
 // 「じっこう中」の時間計算。setInterval のカウントではなく、タイムスタンプの差で計算する。
-import type { PlanItem, RunState } from './types'
+import type { HistoryEntry, PlanItem, Rating, RunState } from './types'
+import { closeSession } from './history'
 
 const MIN = 60_000
 export const EXTEND_MS = 5 * MIN
 
-export function startRun(items: PlanItem[], now: number): RunState {
-  return { items, index: 0, accumMs: 0, runningSince: now, extraMs: 0, fired: [], finished: false }
+function newEntry(item: PlanItem, now: number): HistoryEntry {
+  return {
+    name: item.name,
+    emoji: item.emoji,
+    color: item.color,
+    plannedMinutes: item.minutes,
+    startedAt: now,
+    endedAt: null,
+    result: null,
+    extensions: 0,
+    rating: null,
+  }
+}
+
+/** いまのカードの記録だけを書きかえる */
+function patchEntry(r: RunState, patch: Partial<HistoryEntry>): RunState {
+  const entries = r.session.entries.map((e, i) => (i === r.index ? { ...e, ...patch } : e))
+  return { ...r, session: { ...r.session, entries } }
+}
+
+export function startRun(items: PlanItem[], now: number, id: string = crypto.randomUUID()): RunState {
+  return {
+    items,
+    index: 0,
+    accumMs: 0,
+    runningSince: now,
+    extraMs: 0,
+    fired: [],
+    phase: 'timer',
+    session: { id, startedAt: now, status: 'running', entries: [newEntry(items[0], now)] },
+  }
+}
+
+/** localStorage から読んだ値が、いまの形式のじっこう中の状態か調べる（古い形式は捨てる） */
+export function normalizeRun(raw: unknown): RunState | null {
+  const r = raw as Partial<RunState> | null
+  if (!r || typeof r !== 'object' || !Array.isArray(r.items) || !r.session || !Array.isArray(r.session.entries)) return null
+  if (r.phase !== 'timer' && r.phase !== 'rate' && r.phase !== 'done') return null
+  if (typeof r.index !== 'number' || r.index < 0 || r.index >= r.items.length || r.session.entries.length !== r.index + 1) return null
+  return r as RunState
 }
 
 export const currentItem = (r: RunState): PlanItem | undefined => r.items[r.index]
@@ -62,15 +101,42 @@ export function resume(r: RunState, now: number): RunState {
 
 /** +5ふん。のびた分の「あと5ふん／1ぷん」は、もういちど話せるようにする */
 export function extend(r: RunState, now: number): RunState {
-  const next = { ...r, extraMs: r.extraMs + EXTEND_MS }
+  const next = patchEntry({ ...r, extraMs: r.extraMs + EXTEND_MS }, { extensions: r.session.entries[r.index].extensions + 1 })
   const el = elapsedMs(next, now)
   const future = new Set(scheduleEvents(durationMs(next)).filter((e) => e.atMs > el).map((e) => e.key))
   return { ...next, fired: next.fired.filter((k) => k === 'half' || !future.has(k as EventKey)) }
 }
 
-/** つぎのカードへ（さいごなら おしまい） */
-export function advance(r: RunState, now: number): RunState {
-  if (r.index + 1 >= r.items.length) return { ...r, finished: true, accumMs: 0, runningSince: null, fired: [] }
-  const wasRunning = isRunning(r)
-  return { ...r, index: r.index + 1, accumMs: 0, runningSince: wasRunning ? now : null, extraMs: 0, fired: [] }
+/** 時間がきた（done）、またはスキップした（skipped）。⭕️❌をえらぶ画面へ。タイマーはここで止まる */
+export function finishCard(r: RunState, how: 'done' | 'skipped', now: number): RunState {
+  // 時間切れは、タブが止まっていて気づくのが遅れても、ほんとうの終了時刻で記録する
+  const scheduledEnd = r.runningSince != null ? r.runningSince + (durationMs(r) - r.accumMs) : now
+  const endedAt = how === 'done' ? Math.min(now, scheduledEnd) : now
+  const done = patchEntry(r, { result: how, endedAt })
+  return { ...done, phase: 'rate', accumMs: 0, runningSince: null, fired: [] }
+}
+
+/** ⭕️／❌をえらんだ。つぎのカードがあれば、そのタイマーをはじめる。なければ おしまい */
+export function rateCard(r: RunState, rating: Rating, now: number): RunState {
+  if (r.phase !== 'rate') return r
+  const rated = patchEntry(r, { rating })
+  const nextIdx = r.index + 1
+  if (nextIdx >= r.items.length) {
+    return { ...rated, phase: 'done', session: { ...rated.session, status: 'finished' } }
+  }
+  return {
+    ...rated,
+    index: nextIdx,
+    accumMs: 0,
+    runningSince: now,
+    extraMs: 0,
+    fired: [],
+    phase: 'timer',
+    session: { ...rated.session, entries: [...rated.session.entries, newEntry(r.items[nextIdx], now)] },
+  }
+}
+
+/** やめて もどる（さいごまで終わっていなければ「とちゅうでやめた」） */
+export function abortRun(r: RunState) {
+  return closeSession(r.session, r.phase)
 }
