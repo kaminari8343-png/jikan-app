@@ -1,5 +1,5 @@
 // りれき: 記録の集計・はなまる判定・バックアップ
-import type { HistoryEntry, HistorySession } from './types'
+import type { HistoryEntry, HistorySession, RunState } from './types'
 
 export const WEEKDAYS = ['にち', 'げつ', 'か', 'すい', 'もく', 'きん', 'ど'] as const
 
@@ -35,15 +35,20 @@ export type DayMark = 'hanamaru' | 'maru' | null
  *
  * 1日に何回かスタートしたときは、ぜんぶの回を合わせて見る。
  * ただし、なにも評価しないうちにやめた回（まちがえてスタートしたなど）は数えない。
+ * じこくカード・じゆうじかん・じかんぎれ（はじめられなかったカード）は判定に入れない（❌にもしない）。
  */
 export function dayMark(sessions: HistorySession[]): DayMark {
   const counted = sessions.filter((s) => s.status === 'finished' || s.entries.some((e) => e.rating !== null))
   if (counted.length === 0) return null
   if (counted.some((s) => s.status !== 'finished')) return null
-  const entries = counted.flatMap((s) => s.entries)
-  if (entries.length === 0) return null
-  return entries.every((e) => e.rating === 'good') ? 'hanamaru' : 'maru'
+  // じこくカード・じゆうじかん・じかんぎれは、判定に入れない
+  const judged = counted.flatMap((s) => s.entries).filter(isJudged)
+  if (judged.length === 0) return null
+  return judged.every((e) => e.rating === 'good') ? 'hanamaru' : 'maru'
 }
+
+/** はなまるの判定に入れる記録（ふつうのカードで、じかんぎれではないもの） */
+export const isJudged = (e: HistoryEntry) => (e.kind ?? 'normal') === 'normal' && e.result !== 'timeout'
 
 /** その日の記録を、時刻順の1本の一覧にする */
 export function dayEntries(sessions: HistorySession[]): { session: HistorySession; entry: HistoryEntry }[] {
@@ -66,7 +71,7 @@ export function weekdayOf(year: number, month0: number, day: number): string {
 }
 
 /** 「もうやめた」ときの記録の閉じかた（さいごまで終わっていれば finished） */
-export function closeSession(session: HistorySession, phase: 'timer' | 'rate' | 'done'): HistorySession {
+export function closeSession(session: HistorySession, phase: RunState['phase']): HistorySession {
   return { ...session, status: phase === 'done' ? 'finished' : 'aborted' }
 }
 
@@ -96,9 +101,11 @@ function parseEntry(v: unknown): HistoryEntry | null {
   const e = v as Record<string, unknown>
   if (!isStr(e.name) || !isStr(e.emoji) || !isNum(e.plannedMinutes) || !isNum(e.startedAt)) return null
   if (e.endedAt !== null && !isNum(e.endedAt)) return null
-  if (e.result !== null && e.result !== 'done' && e.result !== 'skipped') return null
+  if (e.result !== null && !['done', 'skipped', 'cutoff', 'timeout'].includes(e.result as string)) return null
+  if (e.kind !== undefined && !['normal', 'fixed', 'free'].includes(e.kind as string)) return null
   if (e.rating !== null && e.rating !== 'good' && e.rating !== 'bad') return null
   return {
+    ...(e.kind !== undefined ? { kind: e.kind as HistoryEntry['kind'] } : {}),
     name: e.name.slice(0, 40),
     emoji: e.emoji.slice(0, 16),
     color: isStr(e.color) && /^#[0-9a-fA-F]{3,8}$/.test(e.color) ? e.color : '#b0bec5',

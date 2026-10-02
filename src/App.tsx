@@ -1,19 +1,21 @@
-import { useEffect, useState } from 'react'
-import { PRESET_CARDS } from './cards'
+import { useEffect, useMemo, useState } from 'react'
+import { DEFAULT_FIXED_CARDS, PRESET_CARDS } from './cards'
 import { AnalogClock } from './components/AnalogClock'
 import { CardEditor } from './components/CardEditor'
 import { Planner } from './components/Planner'
-import { Runner, announceStart } from './components/Runner'
+import { Runner } from './components/Runner'
+import { speakCues } from './cues'
+import { buildTimeline, syncFixed, timelineSectors } from './schedule'
 import { PresetsDialog } from './components/PresetsDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useNow } from './hooks'
 import { DEFAULT_SETTINGS, setSpeechSettings, unlockSpeech } from './speech'
 import { useStored } from './storage'
-import { formatClock } from './time'
+import { formatClock, startOfDay } from './time'
 import { abortRun, normalizeRun, startRun } from './runner'
 import { upsertSession } from './history'
 import { HistoryScreen } from './components/HistoryScreen'
-import type { CardDef, HistorySession, PlanItem, RunState, SavedPlan, Settings } from './types'
+import type { CardDef, FixedCard, HistorySession, PlanItem, RunState, SavedPlan, Settings } from './types'
 import { load, save } from './storage'
 
 type Dialog = null | 'card' | 'presets' | 'settings'
@@ -24,6 +26,9 @@ export function App() {
   const [plan, setPlan] = useStored<PlanItem[]>('plan', [])
   const [customCards, setCustomCards] = useStored<CardDef[]>('customCards', [])
   const [presets, setPresets] = useStored<SavedPlan[]>('presets', [])
+  const [fixedCards, setFixedCards] = useStored<FixedCard[]>('fixedCards', DEFAULT_FIXED_CARDS)
+  /** スタート時刻（0:00からの分）。null は「いま」 */
+  const [startMin, setStartMin] = useState<number | null>(null)
   const [settings, setSettings] = useStored<Settings>('settings', DEFAULT_SETTINGS)
   const [dialog, setDialog] = useState<Dialog>(null)
   // じっこう中の状態は、リロードしても続けられるよう保存する
@@ -43,13 +48,26 @@ export function App() {
 
   useEffect(() => setSpeechSettings(settings), [settings])
 
+  // 親が設定画面でじこくカードを直したら、よていの中のじこくカードにも反映する
+  useEffect(() => {
+    setPlan((p) => syncFixed(p, fixedCards))
+  }, [fixedCards, setPlan])
+
+  const dayStartMs = startOfDay(now.getTime())
+  // 「いま」のときは、秒を切りすてた分単位でそろえる（のこり時間が 5ふん → 4ぷん と ずれないように）
+  const startAt = startMin === null ? Math.floor(now.getTime() / 60_000) * 60_000 : dayStartMs + startMin * 60_000
+  const timeline = useMemo(() => buildTimeline(plan, startAt, dayStartMs), [plan, startAt, dayStartMs])
+  const sectors = useMemo(() => timelineSectors(timeline), [timeline])
+
   const cards = [...PRESET_CARDS, ...customCards]
 
   const start = () => {
     // iOS は、タップのなかで一度しゃべらせないと音が出ない
     unlockSpeech()
-    announceStart(plan[0].name, plan[0].minutes)
-    updateRun(startRun(plan, Date.now()))
+    // スタート時刻をかえていても、じっこうは「いま」からはじまる（じこくカードの時刻は、そのまま）
+    const step = startRun(plan, Date.now())
+    speakCues(step.cues)
+    updateRun(step.run)
   }
 
   if (run) return <Runner run={run} onChange={updateRun} onExit={exitRun} />
@@ -73,7 +91,7 @@ export function App() {
       <div className="layout">
         <section className="clock-area">
           <div className="clock-wrap">
-            <AnalogClock now={now} />
+            <AnalogClock now={now} sectors={sectors} />
           </div>
           <p className="now-text">
             いま <b>{formatClock(now)}</b>
@@ -81,7 +99,19 @@ export function App() {
         </section>
 
         <div className="main-col">
-          <Planner now={now} cards={cards} items={plan} onChange={setPlan} onCreateCard={() => setDialog('card')} />
+          <Planner
+            now={now}
+            cards={cards}
+            fixedCards={fixedCards}
+            items={plan}
+            timeline={timeline}
+            startMin={startMin}
+            startAt={startAt}
+            dayStartMs={dayStartMs}
+            onStartMin={setStartMin}
+            onChange={setPlan}
+            onCreateCard={() => setDialog('card')}
+          />
 
           <div className="actions">
             <button type="button" className="big-btn big-btn--sub" onClick={() => setDialog('presets')}>
@@ -111,11 +141,13 @@ export function App() {
           onSave={(name) =>
             setPresets([
               ...presets,
-              { id: crypto.randomUUID(), name, items: plan.map(({ uid: _uid, ...rest }) => rest) },
+              { id: crypto.randomUUID(), name, startMin, items: plan.map(({ uid: _uid, ...rest }) => rest) },
             ])
           }
           onLoad={(p) => {
-            setPlan(p.items.map((i) => ({ ...i, uid: crypto.randomUUID() })))
+            // じこくカードは、いまの設定（時刻・名前）にそろえる
+            setPlan(syncFixed(p.items.map((i) => ({ ...i, uid: crypto.randomUUID() })), fixedCards))
+            setStartMin(p.startMin ?? null)
             setDialog(null)
           }}
           onDelete={(id) => setPresets(presets.filter((p) => p.id !== id))}
@@ -127,6 +159,8 @@ export function App() {
           onChange={setSettings}
           history={history}
           onImportHistory={setHistory}
+          fixedCards={fixedCards}
+          onFixedCards={setFixedCards}
           customCards={customCards}
           onDeleteCard={(id) => setCustomCards(customCards.filter((c) => c.id !== id))}
           onClose={() => setDialog(null)}

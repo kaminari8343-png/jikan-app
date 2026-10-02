@@ -78,7 +78,7 @@ export function HistoryScreen({ sessions, now, onBack }: { sessions: HistorySess
           })}
         </div>
         <p className="cal__legend">
-          💮 ぜんぶ ⭕でおわった　⭕ ❌が まざってた　・ とちゅうで やめた
+          💮 ぜんぶ ⭕でおわった　⭕ ❌が まざってた　・ とちゅうで やめた　（じこくカード・じゆうじかん・じかんぎれは かぞえないよ）
         </p>
       </section>
 
@@ -112,23 +112,36 @@ export function HistoryScreen({ sessions, now, onBack }: { sessions: HistorySess
 }
 
 function EntryRow({ entry }: { entry: HistoryEntry }) {
+  const kind = entry.kind ?? 'normal'
+  const timeout = entry.result === 'timeout'
+  const judged = kind === 'normal' && !timeout
   return (
-    <div className="entry" style={{ borderLeftColor: entry.color }}>
+    <div className={`entry${kind === 'fixed' ? ' entry--fixed' : ''}${kind === 'free' ? ' entry--free' : ''}${timeout ? ' entry--timeout' : ''}`} style={{ borderLeftColor: entry.color }}>
       <div className="entry__main">
         <span className="entry__time">
-          {hm(entry.startedAt)}〜{entry.endedAt != null ? hm(entry.endedAt) : ''}
+          {timeout ? 'じかんぎれ' : `${hm(entry.startedAt)}〜${entry.endedAt != null ? hm(entry.endedAt) : ''}`}
         </span>
         <span className="entry__emoji">{entry.emoji}</span>
-        <span className="entry__name">{entry.name}</span>
-        <span className="entry__rating" aria-label={entry.rating === 'good' ? 'まる' : entry.rating === 'bad' ? 'ばつ' : 'つけてない'}>
-          {entry.rating === 'good' ? '⭕' : entry.rating === 'bad' ? '❌' : '−'}
+        <span className="entry__name">
+          {kind === 'fixed' && '📌 '}
+          {entry.name}
         </span>
+        {judged && (
+          <span className="entry__rating" aria-label={entry.rating === 'good' ? 'まる' : entry.rating === 'bad' ? 'ばつ' : 'つけてない'}>
+            {entry.rating === 'good' ? '⭕' : entry.rating === 'bad' ? '❌' : '−'}
+          </span>
+        )}
       </div>
       <div className="entry__chips">
-        <span className="chip">よてい {formatMinutes(entry.plannedMinutes)}</span>
-        {entry.result === 'skipped' && <span className="chip chip--skip">スキップ</span>}
-        {entry.result === 'done' && <span className="chip chip--done">さいごまで やった</span>}
-        {entry.result === null && <span className="chip chip--skip">とちゅうで やめた</span>}
+        {kind === 'free' && <span className="chip chip--free">じゆうじかん</span>}
+        {kind === 'fixed' && <span className="chip chip--fixed">じこくカード</span>}
+        {kind === 'fixed' && entry.plannedMinutes > 0 && <span className="chip">{formatMinutes(entry.plannedMinutes)}</span>}
+        {kind === 'normal' && <span className="chip">よてい {formatMinutes(entry.plannedMinutes)}</span>}
+        {timeout && <span className="chip chip--skip">はじめられなかった</span>}
+        {kind === 'normal' && entry.result === 'skipped' && <span className="chip chip--skip">スキップ</span>}
+        {kind === 'normal' && entry.result === 'done' && <span className="chip chip--done">さいごまで やった</span>}
+        {kind === 'normal' && entry.result === 'cutoff' && <span className="chip chip--skip">じこくカードで ちゅうだん</span>}
+        {kind === 'normal' && entry.result === null && <span className="chip chip--skip">とちゅうで やめた</span>}
         {entry.extensions > 0 && <span className="chip">+5ふん × {entry.extensions}</span>}
       </div>
     </div>

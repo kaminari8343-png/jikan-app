@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { CardDef, HistorySession, Settings } from '../types'
+import type { CardDef, FixedCard, HistorySession, Settings } from '../types'
+import { formatMinOfDay, formatSpan } from '../time'
+import { FixedCardEditor } from './FixedCardEditor'
 import { buildBackup, dateKey, mergeHistory, parseBackup } from '../history'
 import { DEFAULT_SETTINGS, isSpeechSupported, speakTest } from '../speech'
 import { say } from '../phrases.logic'
@@ -16,8 +18,17 @@ const TESTS: { label: string; text: () => string }[] = [
     label: 'おわり',
     text: () => `${say('end', { name: SAMPLE.name })} ${say('next', { next: SAMPLE.next })}`,
   },
+  { label: 'ふりかえり', text: () => say('ask', { name: SAMPLE.name }) },
+  { label: 'まる', text: () => say('rateGood') },
+  { label: 'ばつ', text: () => say('rateBad') },
   { label: 'ぜんぶおわり', text: () => say('allDone') },
   { label: '+5ふん', text: () => say('extended', { minutes: 5 }) },
+  { label: 'じこくになった', text: () => say('fixedStart', { fixed: SAMPLE.fixed, clock: SAMPLE.clock }) },
+  { label: '5ふんまえ', text: () => say('fixedSoon', { fixed: SAMPLE.fixed, minutes: SAMPLE.five }) },
+  { label: 'じゆうじかん', text: () => say('freeStart', { fixed: SAMPLE.fixed, minutes: SAMPLE.free }) },
+  { label: 'じかんぎれ', text: () => say('timeoutNote') },
+  { label: 'のばせない', text: () => say('cannotExtend', { fixed: SAMPLE.fixed }) },
+  { label: 'おやすみ', text: () => say('endOfDay') },
 ]
 
 export function SettingsDialog({
@@ -27,6 +38,8 @@ export function SettingsDialog({
   onImportHistory,
   customCards,
   onDeleteCard,
+  fixedCards,
+  onFixedCards,
   onClose,
 }: {
   settings: Settings
@@ -35,9 +48,12 @@ export function SettingsDialog({
   onImportHistory: (h: HistorySession[]) => void
   customCards: CardDef[]
   onDeleteCard: (id: string) => void
+  fixedCards: FixedCard[]
+  onFixedCards: (c: FixedCard[]) => void
   onClose: () => void
 }) {
   const [voices, setVoices] = useState<string[]>([])
+  const [editingFixed, setEditingFixed] = useState<FixedCard | 'new' | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const exportHistory = () => {
@@ -110,6 +126,41 @@ export function SettingsDialog({
       </div>
 
       <div className="field">
+        <span>📌 じこくカード（おうちのひと用）</span>
+        <small>じかんが きまっている よてい。よていの なかで、じこくじゅんに ならびます</small>
+        <ul className="preset-list">
+          {[...fixedCards]
+            .sort((a, b) => a.startMin - b.startMin)
+            .map((c) => (
+              <li key={c.id} className="preset">
+                <span className="preset__main preset__main--static" style={{ borderLeft: `12px solid ${c.color}` }}>
+                  <span className="preset__items">{c.emoji}</span>
+                  <b>{c.name}</b>
+                  <small>
+                    {formatMinOfDay(c.startMin)}
+                    {c.minutes === 0 ? ' から（1日の おわり）' : ` 〜 ${formatSpan(c.minutes)}`}
+                  </small>
+                </span>
+                <button type="button" className="icon-btn" aria-label={`${c.name} をなおす`} onClick={() => setEditingFixed(c)}>
+                  ✏️
+                </button>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={`${c.name} をけす`}
+                  onClick={() => window.confirm(`「${c.name}」を けしていい？`) && onFixedCards(fixedCards.filter((x) => x.id !== c.id))}
+                >
+                  🗑️
+                </button>
+              </li>
+            ))}
+        </ul>
+        <button type="button" className="big-btn big-btn--sub" onClick={() => setEditingFixed('new')}>
+          ＋ じこくカードを ついか
+        </button>
+      </div>
+
+      <div className="field">
         <span>きろくの バックアップ</span>
         <div className="test-grid">
           <button type="button" className="big-btn big-btn--sub" onClick={exportHistory}>
@@ -154,6 +205,16 @@ export function SettingsDialog({
             ))}
           </ul>
         </div>
+      )}
+      {editingFixed && (
+        <FixedCardEditor
+          initial={editingFixed === 'new' ? null : editingFixed}
+          onClose={() => setEditingFixed(null)}
+          onSave={(c) => {
+            onFixedCards(fixedCards.some((x) => x.id === c.id) ? fixedCards.map((x) => (x.id === c.id ? c : x)) : [...fixedCards, c])
+            setEditingFixed(null)
+          }}
+        />
       )}
     </Modal>
   )

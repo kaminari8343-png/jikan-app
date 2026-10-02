@@ -63,6 +63,55 @@ export function formatMmSs(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
+const HOUR_KANA = [
+  'じゅうにじ', 'いちじ', 'にじ', 'さんじ', 'よじ', 'ごじ', 'ろくじ', 'しちじ', 'はちじ', 'くじ', 'じゅうじ', 'じゅういちじ',
+]
+
+/** 時刻（0:00からの分）のかな読み。例: 18:30 → ろくじ さんじゅっぷん */
+export function clockToKana(minOfDay: number): string {
+  const h = Math.floor(minOfDay / 60) % 12
+  const m = minOfDay % 60
+  return m === 0 ? HOUR_KANA[h] : `${HOUR_KANA[h]} ${minutesToKana(m)}`
+}
+
+/** 画面用: 時刻（0:00からの分）→ "6じ30ぷん" */
+export function formatMinOfDay(minOfDay: number): string {
+  const h = Math.floor(minOfDay / 60) % 12 || 12
+  const m = minOfDay % 60
+  return m === 0 ? `${h}じ` : `${h}じ${m}${funSuffix(m)}`
+}
+
+/** 0:00からの分 ←→ "HH:MM"（<input type="time"> 用） */
+export const minOfDayToInput = (min: number) => `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`
+export function inputToMinOfDay(v: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})/.exec(v)
+  if (!m) return null
+  const h = Number(m[1])
+  const mm = Number(m[2])
+  return h < 24 && mm < 60 ? h * 60 + mm : null
+}
+
+/** ある時刻（ms）の、その日の 0:00（ms） */
+export function startOfDay(ms: number): number {
+  const d = new Date(ms)
+  d.setHours(0, 0, 0, 0)
+  return d.getTime()
+}
+
+/** ある時刻（ms）の、0:00からの分（秒は小数） */
+export function minuteOfDay(ms: number): number {
+  const d = new Date(ms)
+  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60
+}
+
+/** 画面用: 分のながさ → "20ぷん" / "1じかん30ぷん" */
+export function formatSpan(min: number): string {
+  if (min < 60) return formatMinutes(min)
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return m === 0 ? `${h}じかん` : `${h}じかん${formatMinutes(m)}`
+}
+
 export function addMinutes(d: Date, minutes: number): Date {
   return new Date(d.getTime() + minutes * 60_000)
 }

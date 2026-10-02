@@ -6,6 +6,8 @@
  *   {name} … カードの名前（例: しゅくだい）
  *   {min}  … かかる分（例: じゅうごふん）  ※読み間違いがないよう、かなで読み上げます
  *   {next} … つぎのカードの名前
+ *   {fixed} … じこくカードの名前（例: ゆうごはん）
+ *   {time} … じこくカードの時刻の読み（例: ろくじ さんじゅっぷん）
  *
  * 設定画面の「テストさいせい」ボタンで、読み間違いがないか聞いて確かめられます。
  */
@@ -30,6 +32,18 @@ export const phrases = {
   next: 'つぎは {next} だね',
   /** ぜんぶおわったとき */
   allDone: 'きょうのよてい ぜんぶおわったよ！すごいね！',
+  /** じこくカードの時刻になったとき（いまのカードを止めて、ふりかえりへ） */
+  fixedStart: '{time}だよ。{fixed}の じかんだよ',
+  /** じこくカードの5分前 */
+  fixedSoon: 'あと{min}で {fixed}だよ',
+  /** じゆうじかんがはじまったとき */
+  freeStart: 'じゆうじかんだよ。{fixed}まで あと{min}だよ',
+  /** じかんぎれのカードがあったとき（ふりかえりのあとに話す） */
+  timeoutNote: 'のこりの カードは じかんぎれだったよ',
+  /** 「+5ふん」が、つぎのじこくカードをこえてしまうとき */
+  cannotExtend: '{fixed}の じかんが あるから、のばせないよ',
+  /** 1日のおわりのじこくカード（ねる）になったとき */
+  endOfDay: 'おつかれさま。おやすみなさい',
   /** 「+5ふん」をおしたとき */
   extended: '{min}、のばしたよ',
 }
@@ -37,4 +51,4 @@ export const phrases = {
 export type PhraseKey = keyof typeof phrases
 
 /** 設定画面の「テストさいせい」で使うサンプル値 */
-export const SAMPLE = { name: 'しゅくだい', next: 'おやつ', minutes: 15, halfMinutes: 7, five: 5, one: 1 }
+export const SAMPLE = { name: 'しゅくだい', next: 'おやつ', fixed: 'ゆうごはん', clock: 18 * 60 + 30, minutes: 15, halfMinutes: 7, five: 5, one: 1, free: 20 }

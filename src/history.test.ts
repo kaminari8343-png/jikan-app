@@ -99,6 +99,40 @@ describe('はなまるのルール', () => {
   })
 })
 
+describe('はなまるの判定から外れるもの', () => {
+  const t = at(2026, 10, 2)
+  const base = () => session('a', t, 'finished', ['good', 'good'])
+
+  it('じこくカード・じゆうじかんは、評価なしでも判定に入らない', () => {
+    const s = base()
+    s.entries.push(entry(t, null, { kind: 'free', name: 'じゆうじかん', result: 'done' }))
+    s.entries.push(entry(t, null, { kind: 'fixed', name: 'ゆうごはん', result: 'done' }))
+    expect(dayMark([s])).toBe('hanamaru')
+  })
+  it('じかんぎれのカードは ❌ 扱いにせず、判定から外す', () => {
+    const s = base()
+    s.entries.push(entry(t, null, { result: 'timeout', endedAt: t }))
+    expect(dayMark([s])).toBe('hanamaru')
+    s.entries.push(entry(t, 'bad'))
+    expect(dayMark([s])).toBe('maru')
+  })
+  it('じこくカードで止めたカード（cutoff）は、評価したとおりに数える', () => {
+    const s = base()
+    s.entries.push(entry(t, 'bad', { result: 'cutoff' }))
+    expect(dayMark([s])).toBe('maru')
+  })
+  it('判定できるカードが1枚もない日は、印なし', () => {
+    const s = session('a', t, 'finished', [])
+    s.entries.push(entry(t, null, { kind: 'fixed', result: 'done' }), entry(t, null, { result: 'timeout' }))
+    expect(dayMark([s])).toBeNull()
+  })
+  it('kind のない古い記録は、ふつうのカードとして数える', () => {
+    const s = base() // kind なし
+    expect(s.entries.every((e) => e.kind === undefined)).toBe(true)
+    expect(dayMark([s])).toBe('hanamaru')
+  })
+})
+
 describe('記録の更新', () => {
   it('upsertSession: 同じ id は置きかえ、新しい id は追加', () => {
     const a = session('a', 1, 'running', [null])
@@ -141,6 +175,40 @@ describe('バックアップ（書き出し・読み込み）', () => {
     const bad = JSON.parse(JSON.stringify(sessions[0]))
     bad.entries[0].rating = 'maybe'
     expect(parseBackup(JSON.stringify({ app: 'jikan-app', history: [bad] }))).toEqual({ ok: true, sessions: [], skipped: 1 })
+  })
+  it('じこくカード・じゆうじかん・じかんぎれ・cutoff も、書き出し/読み込みでそのまま戻る', () => {
+    const s = session('n', at(2026, 10, 5), 'finished', ['good'])
+    s.entries.push(
+      entry(at(2026, 10, 5, 17), null, { kind: 'free', name: 'じゆうじかん', result: 'done', emoji: '🕊️' }),
+      entry(at(2026, 10, 5, 18), null, { kind: 'fixed', name: 'ゆうごはん', result: 'done' }),
+      entry(at(2026, 10, 5, 18), null, { kind: 'normal', result: 'timeout' }),
+      entry(at(2026, 10, 5, 19), 'bad', { result: 'cutoff' }),
+    )
+    expect(parseBackup(buildBackup([s]))).toEqual({ ok: true, sessions: [s], skipped: 0 })
+  })
+  it('古い形式（kind なし・result は done/skipped）の記録も、そのまま読める', () => {
+    const old = {
+      app: 'jikan-app',
+      version: 1,
+      history: [
+        {
+          id: 'old',
+          startedAt: at(2026, 10, 2),
+          status: 'finished',
+          entries: [{ name: 'しゅくだい', emoji: '✏️', color: '#ffb84d', plannedMinutes: 15, startedAt: at(2026, 10, 2), endedAt: at(2026, 10, 2) + 900000, result: 'done', extensions: 0, rating: 'good' }],
+        },
+      ],
+    }
+    const parsed = parseBackup(JSON.stringify(old))
+    expect(parsed.ok && parsed.sessions[0].entries[0].kind).toBeUndefined()
+    expect(parsed).toMatchObject({ ok: true, skipped: 0 })
+  })
+  it('kind や result が ふせいな記録は とばす', () => {
+    const bad = JSON.parse(JSON.stringify(sessions[0]))
+    bad.entries[0].kind = 'weird'
+    const bad2 = JSON.parse(JSON.stringify(sessions[0]))
+    bad2.entries[0].result = 'weird'
+    expect(parseBackup(JSON.stringify({ app: 'jikan-app', history: [bad, bad2] }))).toEqual({ ok: true, sessions: [], skipped: 2 })
   })
   it('「じっこう中」のまま書き出された記録は、やめた扱いで読みこむ', () => {
     const running = session('r', at(2026, 10, 4), 'running', ['good'])
