@@ -30,5 +30,5 @@ export default defineConfig({
       workbox: { globPatterns: ['**/*.{js,css,html,svg,png}'] },
     }),
   ],
-  test: { include: ['src/**/*.test.ts'] },
+  test: { include: ['src/**/*.test.{ts,tsx}'] },
 })
