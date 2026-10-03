@@ -2,8 +2,6 @@ import { useState } from 'react'
 import {
   DndContext,
   DragOverlay,
-  MouseSensor,
-  TouchSensor,
   pointerWithin,
   rectIntersection,
   useDraggable,
@@ -30,6 +28,7 @@ import {
   type Timeline,
 } from '../schedule'
 import { StepButton } from './StepButton'
+import { SafeMouseSensor, SafeTouchSensor } from '../dndSensors'
 
 const PALETTE_ZONE = 'palette-zone'
 const LIST_ZONE = 'list-zone'
@@ -100,9 +99,9 @@ export function Planner({
   const [dragging, setDragging] = useState<Dragging>(null)
 
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(SafeMouseSensor, { activationConstraint: { distance: 6 } }),
     // さわってすぐ動かすとスクロール、ちょっと押さえると ドラッグ
-    useSensor(TouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    useSensor(SafeTouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
   )
 
   const addNormal = (card: CardDef) => onChange(insertNormalSmart(items, newItem(card), startAt, dayStartMs))

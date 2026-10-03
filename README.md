@@ -66,6 +66,15 @@ npm run build
 新しいセリフの種類は `src/phrases/types.ts` の `PHRASE_KEYS` に足して、全キャラのファイルに書きます（書きわすれるとビルドでエラーになります）。
 アプリの ⚙️ せってい →「ためしにきく」「テストさいせい」で、読み間違いがないか確認できます。
 
+## 入力欄と iPad / iPhone（Safari）の注意
+iOS では、入力欄（input・textarea・select）や その祖先に `user-select: none` / `-webkit-touch-callout: none` / `touch-action: none` / `pointer-events: none` があったり、
+タッチを `preventDefault` したり、ドラッグ部品（dnd-kit）の中に入力欄があると、**キーボードが出なくなる**ことがあります。
+- `html` / `body` / モーダルには `user-select: none` をかけない。さわって操作する部品（ボタン・カード・列・時計…）だけに、`styles.css` の「操作部品」rule でかける
+- 入力欄は `styles.css` の rule で `user-select: text` / `touch-action: manipulation` と決めている
+- ドラッグは `src/dndSensors.ts` の `SafeMouseSensor` / `SafeTouchSensor` が、入力欄・label・`data-no-drag` の上では はじめない
+- `src/inputs.test.tsx` が、実際の画面（メイン・カスタムカード・いつものよてい・せってい・じこくカード編集・どだい・ながいやすみ）の入力欄をしらべます。
+  あたらしい入力欄を足したときも `npm test` で 自動チェックされます
+
 ## 公開（GitHub Pages）
 1. GitHub の **Settings → Pages → Source** を **GitHub Actions** にする（最初の1回だけ）
 2. `main` に push すると `.github/workflows/deploy.yml` が自動でビルド＆デプロイ

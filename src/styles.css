@@ -22,9 +22,45 @@ body {
   font-family: 'Hiragino Maru Gothic ProN', 'Hiragino Sans', 'BIZ UDPGothic', 'Yu Gothic', system-ui, sans-serif;
   font-weight: 700;
   overscroll-behavior: none;
+  /* ここ（html / body）には user-select: none や -webkit-touch-callout: none をかけない。
+     iOS では、入力欄の祖先に かかっていると、キーボードが出なくなることがあるため。
+     さわって操作する部品だけに、下の「操作部品」の rule でかける */
+}
+
+/* 操作部品: さわったときに文字が選ばれたり、長おしメニューが出たりしないようにする。
+   ※ 入力欄（input / textarea / select）や、それを ふくむ場所（html・body・モーダル・フォーム）には かけないこと。
+   （src/inputs.test.tsx が、入力欄とその祖先に抑止設定がかかっていないか 自動でしらべます） */
+button,
+[role='button'],
+[role='radio'],
+[role='tab'],
+.card,
+.plan-row,
+.plan-empty,
+.clock,
+.runner,
+.cal,
+.entry,
+.daybar__info {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* 入力欄は、いつでも 文字を選べて・さわれて・キーボードが出る（上の抑止設定から ぜったいに除外）。
+   touch-action は manipulation（スクロールも ダブルタップ拡大の待ちも じゃましない）。none にしないこと */
+input,
+textarea,
+select,
+[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+  touch-action: manipulation;
+}
+textarea,
+select {
+  font: inherit;
 }
 
 button {
@@ -39,8 +75,6 @@ button:disabled {
 }
 input {
   font: inherit;
-  -webkit-user-select: text;
-  user-select: text;
 }
 
 .app {
