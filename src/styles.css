@@ -1460,3 +1460,73 @@ input {
   border-radius: 16px;
   font-size: 18px;
 }
+
+/* こえの キャラクター */
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.char-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  border: 4px solid transparent;
+}
+.char-card--on {
+  border-color: var(--accent);
+  background: #fff1d6;
+}
+.char-btn {
+  min-height: 132px;
+  border-radius: 18px;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px 6px;
+  text-align: center;
+  touch-action: manipulation;
+}
+.char-btn__emoji {
+  font-size: 52px;
+  line-height: 1.1;
+}
+.char-btn b {
+  font-size: 18px;
+  text-wrap: balance;
+}
+.char-btn small {
+  font-size: 13px;
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+.char-try {
+  min-height: 44px;
+  border-radius: 14px;
+  background: var(--bg);
+  font-size: 16px;
+  touch-action: manipulation;
+}
+.char-tune {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border-radius: 16px;
+}
+.char-tune summary {
+  cursor: pointer;
+  font-size: 17px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+}
+.char-tune .field {
+  margin-top: 8px;
+}

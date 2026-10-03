@@ -1,0 +1,62 @@
+// 声の設定（保存データの形・移行・キャラの決めかた）
+import { CHARACTER_IDS, getCharacter, type Character, type CharacterId } from './phrases'
+import { characterOfDay } from './dailyCharacter'
+import type { Tuning } from './voices'
+
+export type CharacterChoice = CharacterId | 'random'
+
+export interface Settings {
+  voiceOn: boolean
+  volume: number
+  /** えらんだキャラ。random は「まいにち かわる」 */
+  character: CharacterChoice
+  /** キャラごとの調整（親が設定画面で、声・高さ・速さを かえたとき） */
+  tuning: Partial<Record<CharacterId, Tuning>>
+}
+
+export const DEFAULT_SETTINGS: Settings = { voiceOn: true, volume: 1, character: 'onee', tuning: {} }
+
+/** 前のバージョンの設定（はやさ・たかさ が ぜんたいで ひとつ）の、はじめの値 */
+const OLD_RATE = 0.9
+const OLD_PITCH = 1.2
+
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** 保存されていた設定を、いまの形にそろえる。前のバージョンの はやさ・たかさ は「やさしい おねえさん」の調整として引きつぐ */
+export function normalizeSettings(raw: unknown): Settings {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const character: CharacterChoice =
+    r.character === 'random' || (CHARACTER_IDS as readonly string[]).includes(r.character as string) ? (r.character as CharacterChoice) : 'onee'
+
+  const tuning: Settings['tuning'] = {}
+  if (r.tuning && typeof r.tuning === 'object') {
+    for (const id of CHARACTER_IDS) {
+      const t = (r.tuning as Record<string, unknown>)[id]
+      if (!t || typeof t !== 'object') continue
+      const { rate, pitch, voice } = t as Record<string, unknown>
+      const clean: Tuning = {}
+      if (isNum(rate)) clean.rate = rate
+      if (isNum(pitch)) clean.pitch = pitch
+      if (typeof voice === 'string' && voice) clean.voice = voice
+      if (Object.keys(clean).length) tuning[id] = clean
+    }
+  }
+  // 前のバージョンの設定
+  if (!tuning.onee && (isNum(r.rate) || isNum(r.pitch))) {
+    const rate = isNum(r.rate) ? r.rate : OLD_RATE
+    const pitch = isNum(r.pitch) ? r.pitch : OLD_PITCH
+    if (rate !== OLD_RATE || pitch !== OLD_PITCH) tuning.onee = { rate, pitch }
+  }
+
+  return {
+    voiceOn: typeof r.voiceOn === 'boolean' ? r.voiceOn : true,
+    volume: isNum(r.volume) ? Math.min(1, Math.max(0, r.volume)) : 1,
+    character,
+    tuning,
+  }
+}
+
+/** いま話すキャラ（random なら、その日のキャラ） */
+export function resolveCharacter(s: Pick<Settings, 'character'>, dateKey: string): Character {
+  return getCharacter(s.character === 'random' ? characterOfDay(dateKey) : s.character)
+}

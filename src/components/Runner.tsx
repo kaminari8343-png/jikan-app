@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Rating, RunState } from '../types'
 import { speakCues } from '../cues'
-import { speak, stopSpeaking } from '../speech'
+import { stopSpeaking } from '../speech'
 import { say } from '../phrases.logic'
 import { formatMinOfDayAp, formatMmSs } from '../time'
 import {
@@ -260,8 +260,7 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
   }
   const skip = () => {
     const step = skipCard(run, Date.now())
-    stopSpeaking()
-    step.cues.forEach((c) => speak(say(c.key, c.vars)))
+    speakCues(step.cues, { interrupt: true })
     apply(step.run)
   }
 

@@ -79,12 +79,7 @@ export interface SavedPlan {
   startMin?: number | null
 }
 
-export interface Settings {
-  voiceOn: boolean
-  rate: number
-  pitch: number
-  volume: number
-}
+export type { Settings } from './voiceSettings'
 
 export type Rating = 'good' | 'bad'
 
