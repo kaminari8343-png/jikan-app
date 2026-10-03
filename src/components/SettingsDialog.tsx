@@ -4,35 +4,37 @@ import { formatMinOfDayAp, formatSpan } from '../time'
 import { FixedCardEditor } from './FixedCardEditor'
 import { TemplatesDialog } from './TemplatesDialog'
 import { buildBackup, dateKey, mergeHistory, parseBackup } from '../history'
-import { DEFAULT_SETTINGS, isSpeechSupported, speakTest } from '../speech'
+import { isSpeechSupported, listJaVoices, speakTest } from '../speech'
 import { say } from '../phrases.logic'
-import { SAMPLE } from '../phrases'
+import { SAMPLE, type Character } from '../phrases'
+import { resolveCharacter } from '../voiceSettings'
+import { CharacterPicker } from './CharacterPicker'
 import { Modal } from './Modal'
 
-/** テストさいせいのボタン一覧: 実際に話すセリフをそのまま出す */
-const TESTS: { label: string; text: () => string }[] = [
-  { label: 'はじまり', text: () => say('start', { name: SAMPLE.name, minutes: SAMPLE.minutes }) },
-  { label: 'はんぶん', text: () => say('half', { minutes: SAMPLE.halfMinutes }) },
-  { label: 'あと5ふん', text: () => say('remaining5', { minutes: SAMPLE.five }) },
-  { label: 'あと1ぷん', text: () => say('remaining1', { minutes: SAMPLE.one }) },
+/** テストさいせいのボタン一覧: えらんだキャラの、実際に話すセリフをそのまま出す */
+const TESTS: { label: string; text: (ch: Character) => string }[] = [
+  { label: 'はじまり', text: (ch) => say('start', { name: SAMPLE.name, minutes: SAMPLE.minutes }, ch) },
+  { label: 'はんぶん', text: (ch) => say('half', { minutes: SAMPLE.halfMinutes }, ch) },
+  { label: 'あと5ふん', text: (ch) => say('remaining5', { minutes: SAMPLE.five }, ch) },
+  { label: 'あと1ぷん', text: (ch) => say('remaining1', { minutes: SAMPLE.one }, ch) },
   {
     label: 'おわり',
-    text: () => `${say('end', { name: SAMPLE.name })} ${say('next', { next: SAMPLE.next })}`,
+    text: (ch) => `${say('end', { name: SAMPLE.name }, ch)} ${say('next', { next: SAMPLE.next }, ch)}`,
   },
-  { label: 'ふりかえり', text: () => say('ask', { name: SAMPLE.name }) },
-  { label: 'まる', text: () => say('rateGood') },
-  { label: 'ばつ', text: () => say('rateBad') },
-  { label: 'ぜんぶおわり', text: () => say('allDone') },
-  { label: '+5ふん', text: () => say('extended', { minutes: 5 }) },
-  { label: 'じこくになった', text: () => say('fixedStart', { fixed: SAMPLE.fixed, clock: SAMPLE.clock }) },
-  { label: '5ふんまえ', text: () => say('fixedSoon', { fixed: SAMPLE.fixed, minutes: SAMPLE.five }) },
-  { label: 'じゆうじかん', text: () => say('freeStart', { fixed: SAMPLE.fixed, minutes: SAMPLE.free }) },
-  { label: 'じかんぎれ', text: () => say('timeoutNote') },
-  { label: 'のばせない', text: () => say('cannotExtend', { fixed: SAMPLE.fixed }) },
-  { label: 'おやすみ', text: () => say('endOfDay') },
-  { label: 'でかける 10ぷんまえ', text: () => say('leaveSoon', { fixed: 'いえをでる', minutes: 10 }) },
-  { label: 'でかける 1ぷんまえ', text: () => say('leaveSoon', { fixed: 'いえをでる', minutes: 1 }) },
-  { label: 'いってらっしゃい', text: () => say('leaveNow') },
+  { label: 'ふりかえり', text: (ch) => say('ask', { name: SAMPLE.name }, ch) },
+  { label: 'まる', text: (ch) => say('rateGood', {}, ch) },
+  { label: 'ばつ', text: (ch) => say('rateBad', {}, ch) },
+  { label: 'ぜんぶおわり', text: (ch) => say('allDone', {}, ch) },
+  { label: '+5ふん', text: (ch) => say('extended', { minutes: 5 }, ch) },
+  { label: 'じこくになった', text: (ch) => say('fixedStart', { fixed: SAMPLE.fixed, clock: SAMPLE.clock }, ch) },
+  { label: '5ふんまえ', text: (ch) => say('fixedSoon', { fixed: SAMPLE.fixed, minutes: SAMPLE.five }, ch) },
+  { label: 'じゆうじかん', text: (ch) => say('freeStart', { fixed: SAMPLE.fixed, minutes: SAMPLE.free }, ch) },
+  { label: 'じかんぎれ', text: (ch) => say('timeoutNote', {}, ch) },
+  { label: 'のばせない', text: (ch) => say('cannotExtend', { fixed: SAMPLE.fixed }, ch) },
+  { label: 'おやすみ', text: (ch) => say('endOfDay', {}, ch) },
+  { label: 'でかける 10ぷんまえ', text: (ch) => say('leaveSoon', { fixed: 'いえをでる', minutes: 10 }, ch) },
+  { label: 'でかける 1ぷんまえ', text: (ch) => say('leaveSoon', { fixed: 'いえをでる', minutes: 1 }, ch) },
+  { label: 'いってらっしゃい', text: (ch) => say('leaveNow', {}, ch) },
 ]
 
 export function SettingsDialog({
@@ -68,6 +70,7 @@ export function SettingsDialog({
   onClose: () => void
 }) {
   const [voices, setVoices] = useState<string[]>([])
+  const active = resolveCharacter(settings, dateKey(Date.now()))
   const [showTemplates, setShowTemplates] = useState(false)
   const [editingFixed, setEditingFixed] = useState<FixedCard | 'new' | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -98,8 +101,7 @@ export function SettingsDialog({
   }
   useEffect(() => {
     if (!isSpeechSupported()) return
-    const read = () =>
-      setVoices(speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith('ja')).map((v) => v.name))
+    const read = () => setVoices(listJaVoices().map((v) => v.name))
     read()
     speechSynthesis.addEventListener?.('voiceschanged', read)
     return () => speechSynthesis.removeEventListener?.('voiceschanged', read)
@@ -119,26 +121,24 @@ export function SettingsDialog({
         {isSpeechSupported() && voices.length === 0 && (
           <small className="warn">にほんごの こえが みつかりません（端末の設定で日本語の声を追加してください）</small>
         )}
-        {voices.length > 0 && <small>つかう声: にほんご（{voices.length}しゅるい）</small>}
+        {voices.length > 0 && <small>つかえる声: にほんご（{voices.length}しゅるい）</small>}
+        <Slider label="おおきさ" min={0.2} max={1} step={0.1} value={settings.volume} onChange={(v) => set('volume', v)} />
       </div>
 
-      <Slider label="はやさ" min={0.6} max={1.3} step={0.05} value={settings.rate} onChange={(v) => set('rate', v)} />
-      <Slider label="たかさ" min={0.8} max={1.8} step={0.05} value={settings.pitch} onChange={(v) => set('pitch', v)} />
-      <Slider label="おおきさ" min={0.2} max={1} step={0.1} value={settings.volume} onChange={(v) => set('volume', v)} />
-      <button type="button" className="link-btn" onClick={() => onChange(DEFAULT_SETTINGS)}>
-        もとに もどす
-      </button>
+      <CharacterPicker settings={settings} onChange={onChange} />
 
       <div className="field">
-        <span>テストさいせい（読みまちがいが ないか きいてね）</span>
+        <span>
+          テストさいせい（読みまちがいが ないか きいてね）　{active.emoji} {active.name}
+        </span>
         <div className="test-grid">
           {TESTS.map((t) => (
-            <button key={t.label} type="button" className="big-btn big-btn--sub" onClick={() => speakTest(t.text())}>
+            <button key={t.label} type="button" className="big-btn big-btn--sub" onClick={() => speakTest(t.text(active), active)}>
               ▶ {t.label}
             </button>
           ))}
         </div>
-        <small>セリフは src/phrases.ts で かえられます</small>
+        <small>えらんだ キャラの セリフで ならすよ。セリフは src/phrases/ の キャラごとの ファイルで かえられます</small>
       </div>
 
       <div className="field">

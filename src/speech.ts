@@ -1,13 +1,15 @@
-// Web Speech API（日本語・やさしい話し方）
+// Web Speech API（日本語）。キャラクターごとに、声・高さ・速さをかえて話す
 
-import type { Settings } from './types'
+import { dateKey } from './history'
+import type { Character } from './phrases'
+import { DEFAULT_SETTINGS, resolveCharacter, type Settings } from './voiceSettings'
+import { chooseVoice, guessGender, isJapanese, utteranceParams, type Gender } from './voices'
 
-export const DEFAULT_SETTINGS: Settings = { voiceOn: true, rate: 0.9, pitch: 1.2, volume: 1 }
+export { DEFAULT_SETTINGS }
 
 const supported = typeof window !== 'undefined' && 'speechSynthesis' in window
 
 let settings: Settings = DEFAULT_SETTINGS
-let cachedVoice: SpeechSynthesisVoice | null = null
 
 export function isSpeechSupported() {
   return supported
@@ -17,23 +19,30 @@ export function setSpeechSettings(s: Settings) {
   settings = s
 }
 
-/** 日本語の声をえらぶ（やさしい声が見つかればそれを優先） */
-function pickVoice(): SpeechSynthesisVoice | null {
-  if (!supported) return null
-  if (cachedVoice) return cachedVoice
-  const ja = speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().replace('_', '-').startsWith('ja'))
-  if (ja.length === 0) return null
-  const preferred = ['kyoko', 'o-ren', 'hattori', 'google 日本語', 'nanami', 'haruka', 'ayumi']
-  cachedVoice =
-    preferred.map((p) => ja.find((v) => v.name.toLowerCase().includes(p))).find(Boolean) ?? ja[0]
-  return cachedVoice
+/** いま話すキャラ（「まいにち かわる」なら、その日のキャラ） */
+export function activeCharacter(): Character {
+  return resolveCharacter(settings, dateKey(Date.now()))
 }
 
-if (supported) {
-  // 声の一覧はあとから読み込まれることがある
-  speechSynthesis.addEventListener?.('voiceschanged', () => {
-    cachedVoice = null
-  })
+export interface JaVoice {
+  name: string
+  lang: string
+  gender: Gender
+}
+
+/** 端末の日本語の声の一覧（声は あとから読み込まれることがある） */
+export function listJaVoices(): JaVoice[] {
+  if (!supported) return []
+  return speechSynthesis
+    .getVoices()
+    .filter(isJapanese)
+    .map((v) => ({ name: v.name, lang: v.lang, gender: guessGender(v.name) }))
+}
+
+/** そのキャラの声（のこりは makeUtterance で高さ・速さをきめる）。声の一覧は毎回読む（iOS は あとから増えるため） */
+export function voiceFor(ch: Character) {
+  const voices = supported ? speechSynthesis.getVoices() : []
+  return chooseVoice(voices, ch.voice, settings.tuning[ch.id]?.voice)
 }
 
 /**
@@ -48,35 +57,36 @@ export function unlockSpeech() {
   speechSynthesis.speak(u)
 }
 
-function makeUtterance(text: string): SpeechSynthesisUtterance {
+function makeUtterance(text: string, ch: Character): SpeechSynthesisUtterance {
   const u = new SpeechSynthesisUtterance(text)
   u.lang = 'ja-JP'
-  const v = pickVoice()
-  if (v) u.voice = v
-  u.rate = settings.rate
-  u.pitch = settings.pitch
+  const pick = voiceFor(ch)
+  if (pick.voice) u.voice = pick.voice
+  const { pitch, rate } = utteranceParams(ch, settings.tuning[ch.id], pick)
+  u.pitch = pitch
+  u.rate = rate
   u.volume = settings.volume
   return u
 }
 
 /** セリフをキューに追加して話す（前のセリフが終わってから話す） */
-export function speak(text: string) {
+export function speak(text: string, ch: Character = activeCharacter()) {
   if (!supported || !settings.voiceOn || !text.trim()) return
-  speechSynthesis.speak(makeUtterance(text))
+  speechSynthesis.speak(makeUtterance(text, ch))
 }
 
 /** いま話している／待っているセリフをすべて止めて、すぐ話す */
-export function speakNow(text: string) {
+export function speakNow(text: string, ch: Character = activeCharacter()) {
   if (!supported) return
   speechSynthesis.cancel()
-  speak(text)
+  speak(text, ch)
 }
 
 /** 設定画面のテスト用。声が OFF でも鳴らす */
-export function speakTest(text: string) {
+export function speakTest(text: string, ch: Character = activeCharacter()) {
   if (!supported) return
   speechSynthesis.cancel()
-  speechSynthesis.speak(makeUtterance(text))
+  speechSynthesis.speak(makeUtterance(text, ch))
 }
 
 export function stopSpeaking() {

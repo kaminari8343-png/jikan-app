@@ -1,0 +1,34 @@
+import type { Character } from './types'
+
+/** げんきな おにいさん（男性の声。元気で、すこし速め）。穴うめの使いかたは onee.ts を見てね */
+export const onii: Character = {
+  id: 'onii',
+  name: 'げんきな おにいさん',
+  emoji: '👦',
+  blurb: 'げんきに おうえんするぞ！',
+  voice: { gender: 'male', slot: 0 },
+  pitch: 1.1,
+  rate: 1.1,
+  kana: 'hiragana',
+  phrases: {
+    start: 'よーし！{name} いくぞー！{min}だ！',
+    half: 'はんぶん きたぞ！あと{min}だ！いけいけー！',
+    remaining5: 'あと{min}！ラストスパートだ！',
+    remaining1: 'あと{min}！ふんばれー！',
+    end: '{name}、おわりー！ナイスファイト！',
+    ask: '{name}、どうだった？じぶんで つけてみろー！',
+    rateGood: 'まるか！さいこうだ！',
+    rateBad: 'ばつか！ドンマイ！つぎは いけるぞ！',
+    next: 'つぎは {next} だ！いくぞー！',
+    allDone: 'きょうの よてい ぜんぶ おわったぞ！さいこうだー！',
+    fixedStart: '{time}だ！{fixed}の じかんだぞー！',
+    fixedSoon: 'あと{min}で {fixed}だぞ！じゅんび しろよー！',
+    leaveSoon: 'あと{min}で {fixed}ぞー！',
+    leaveNow: 'いってこーい！がんばれよー！',
+    freeStart: 'じゆうじかんだ！{fixed}まで あと{min}だぞ！',
+    timeoutNote: 'のこりの カードは じかんぎれだ！つぎは がんばろうな！',
+    cannotExtend: '{fixed}の じかんが あるから、のばせないぞ！',
+    endOfDay: 'おつかれー！ゆっくり やすめよ！おやすみ！',
+    extended: '{min}、のばしたぞ！',
+  },
+}

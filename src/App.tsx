@@ -13,7 +13,8 @@ import { DayBar, type DayTab } from './components/DayBar'
 import { PresetsDialog } from './components/PresetsDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useNow } from './hooks'
-import { DEFAULT_SETTINGS, setSpeechSettings, unlockSpeech } from './speech'
+import { setSpeechSettings, unlockSpeech } from './speech'
+import { normalizeSettings } from './voiceSettings'
 import { useStored } from './storage'
 import { addDaysMs, formatClock, startOfDay } from './time'
 import { abortRun, normalizeRun, startRun } from './runner'
@@ -49,7 +50,8 @@ export function App() {
   const [tab, setTab] = useState<DayTab>('today')
   /** 日ごとの、スタート時刻（0:00からの分）。ない日は 「いま」（あしたは さいしょのじこくカード） */
   const [startMins, setStartMins] = useState<Record<string, number | null>>({})
-  const [settings, setSettings] = useStored<Settings>('settings', DEFAULT_SETTINGS)
+  // 声の設定: 前のバージョンの保存データも、いまの形（キャラ・調整）にそろえて読みこむ
+  const [settings, setSettings] = useState<Settings>(() => normalizeSettings(load<unknown>('settings', null)))
   const [dialog, setDialog] = useState<Dialog>(null)
   // じっこう中の状態は、リロードしても続けられるよう保存する
   const [run, setRun] = useState<RunState | null>(() => normalizeRun(load<unknown>('run', null)))
@@ -73,6 +75,7 @@ export function App() {
     save('fixedCardsV', 2)
   }, [fixedCards])
   useEffect(() => save('templates', templates), [templates])
+  useEffect(() => save('settings', settings), [settings])
   useEffect(() => save('plans', plans), [plans])
   useEffect(() => save('planTypes', planTypes), [planTypes])
 

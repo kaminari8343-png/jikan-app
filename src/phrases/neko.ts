@@ -1,0 +1,34 @@
+import type { Character } from './types'
+
+/** ねこ（高めの声。語尾は「〜にゃ」）。穴うめの使いかたは onee.ts を見てね */
+export const neko: Character = {
+  id: 'neko',
+  name: 'ねこ',
+  emoji: '🐱',
+  blurb: 'にゃんにゃん おうえんするにゃ',
+  voice: { gender: 'female', slot: 1 },
+  pitch: 1.8,
+  rate: 1.05,
+  kana: 'hiragana',
+  phrases: {
+    start: '{name}、はじまるにゃ！{min}だにゃ！',
+    half: 'はんぶん たったにゃ。あと{min}だにゃ',
+    remaining5: 'あと{min}だにゃ！',
+    remaining1: 'あと{min}だにゃ！がんばるにゃ！',
+    end: '{name}、おわりだにゃ！よくがんばったにゃ！',
+    ask: '{name}、どうだったにゃ？じぶんで つけてみるにゃ',
+    rateGood: 'まるだにゃ！すごいにゃ！',
+    rateBad: 'ばつだったにゃ。つぎは がんばるにゃ',
+    next: 'つぎは {next} だにゃ',
+    allDone: 'きょうの よてい ぜんぶ おわったにゃ！すごいにゃ！',
+    fixedStart: '{time}だにゃ。{fixed}の じかんだにゃ',
+    fixedSoon: 'あと{min}で {fixed}だにゃ',
+    leaveSoon: 'あと{min}で {fixed}にゃ',
+    leaveNow: 'いってらっしゃいにゃ！',
+    freeStart: 'じゆうじかんだにゃ。{fixed}まで あと{min}だにゃ',
+    timeoutNote: 'のこりの カードは じかんぎれだったにゃ',
+    cannotExtend: '{fixed}の じかんが あるから、のばせないにゃ',
+    endOfDay: 'おつかれさまにゃ。おやすみにゃ',
+    extended: '{min}、のばしたにゃ',
+  },
+}
