@@ -71,22 +71,29 @@ npm run build
 新しいセリフの種類は `src/phrases/types.ts` の `PHRASE_KEYS` に足して、全キャラのファイルに書きます（書きわすれるとビルドでエラーになります）。
 アプリの ⚙️ せってい →「ためしにきく」「テストさいせい」で、読み間違いがないか確認できます。
 
-## あたらしい バージョンが とどくしくみ（PWA）
-ホーム画面のアプリは、画面を端末にキャッシュ（Service Worker）してすぐ開きます。公開しても、開いたままの画面は古いままなので、`src/updates.ts` が次をします。
-- アプリを開いたとき・画面にもどったとき・30分ごとに、あたらしい版がないか しらべる
-- あたらしい版に切りかわったとき、**開いて15秒以内なら自動で よみこみなおし**、それ以外は画面の上に「🔄 あたらしい バージョンが あるよ［こうしんする］」を出す（そうさ中に とつぜん消さない）
-- 画面の下と ⚙️せってい に「バージョン（ビルドの日時とコミット番号）」を出すので、いま見ている画面が公開したばかりの版か たしかめられます。⚙️せってい →「あたらしい バージョンを さがす」「がめんを よみこみなおす」もあります
-- 記録・よてい・設定は localStorage にあるので、よみこみなおしても きえません
-- 古い版のままに見えるとき: ホーム画面のアプリを一度 完全に閉じて（アプリの切りかえ画面で上へスワイプ）開き直す。それでも古ければ もう一度開き直す
+## 入力欄と iPad / iPhone の注意（キーボードが出ない問題）
+iOS では、入力欄（input・textarea・select）まわりに次があると、**キーボードが出なくなる**ことがあります。特に **ホーム画面に追加したアプリ（standalone）** で起きやすいです。
+- 入力欄や その祖先に `user-select: none` / `-webkit-touch-callout: none` / `touch-action: none` / `pointer-events: none`
+- 入力欄を `preventDefault` するイベント処理や、ドラッグ部品（dnd-kit）の中の入力欄
+- 入力欄の祖先に `position: fixed` / `sticky`・`transform`・`overflow: hidden/auto`・`100vh`・`overscroll-behavior` などがある（重ね合わせのダイアログ、二重スクロール、全画面レイアウト）
+- viewport の `user-scalable=no` / `maximum-scale`
 
-## 入力欄と iPad / iPhone（Safari）の注意
-iOS では、入力欄（input・textarea・select）や その祖先に `user-select: none` / `-webkit-touch-callout: none` / `touch-action: none` / `pointer-events: none` があったり、
-タッチを `preventDefault` したり、ドラッグ部品（dnd-kit）の中に入力欄があると、**キーボードが出なくなる**ことがあります。
-- `html` / `body` / モーダルには `user-select: none` をかけない。さわって操作する部品（ボタン・カード・列・時計…）だけに、`styles.css` の「操作部品」rule でかける
-- 入力欄は `styles.css` の rule で `user-select: text` / `touch-action: manipulation` と決めている
-- ドラッグは `src/dndSensors.ts` の `SafeMouseSensor` / `SafeTouchSensor` が、入力欄・label・`data-no-drag` の上では はじめない
-- `src/inputs.test.tsx` が、実際の画面（メイン・カスタムカード・いつものよてい・せってい・じこくカード編集・どだい・ながいやすみ）の入力欄をしらべます。
-  あたらしい入力欄を足したときも `npm test` で 自動チェックされます
+そのため:
+- ダイアログ（`src/components/Modal.tsx`）は、画面の上に重ねず、**ふつうの全画面ページ**として表示します（ひらいている間、うしろのよてい画面・ドラッグ部品はありません。閉じるとスクロール位置が戻ります）。ふかいダイアログ（どだい・じこくカード編集・しんだん）は、親の画面と入れかえて開きます
+- `html` / `body` には `user-select: none` をかけず、さわって操作する部品だけにかけます。入力欄は `user-select: text` / `touch-action: manipulation` と明示
+- ドラッグは `src/dndSensors.ts` の `SafeMouseSensor` / `SafeTouchSensor` が、入力欄・label・`data-no-drag` の上では はじめません
+- `src/inputs.test.tsx` が、実際の画面の入力欄と その祖先を しらべます（上の項目すべて）。入力欄を足したときも `npm test` で自動チェックされます
+- ⚙️せってい →「🛠 もじが いれられない とき（しんだん）」: 入力欄を ためして、タッチ・フォーカス・キーボードのログ（standaloneか、Service Worker、画面サイズ、バージョン）を コピーできます。実機で 起きたときの原因さがしに 使います
+
+## あたらしい バージョンが とどくしくみ（PWA）
+ホーム画面のアプリは、画面を端末にキャッシュ（Service Worker）してすぐ開きます。iOS のホーム画面アプリは Service Worker の更新が遅く、公開しても古い画面のままになることがあるので、`src/updates.ts` が **2とおり**で確かめます。
+- Service Worker の更新（`registration.update()`、切りかわりは `controllerchange`）
+- `version.json`（ビルドのたびに公開。キャッシュを使わず取りにいき、いまの版より日時が新しいか比べる）
+- あたらしい版と分かったら、**開いて15秒以内なら、Service Worker とキャッシュをすてて自動で よみこみなおし**、それ以外は画面の上に「🔄 あたらしい バージョンが あるよ［こうしんする］」を出す（そうさ中に とつぜん消さない）
+- しらべるタイミング: アプリを開いたとき・画面にもどったとき・30分ごと
+- **版の番号**: 画面の下と ⚙️せってい に「バージョン（ビルドの日時とコミット番号）」を表示。⚙️せってい →「あたらしい バージョンを さがす」「がめんを よみこみなおす」もあります
+- きろく・よてい・設定は localStorage にあるので、よみこみなおしても きえません
+- 古い版のままに見えるとき: ホーム画面のアプリを一度完全に閉じて（アプリの切りかえ画面で上へスワイプ）開き直す
 
 ## 公開（GitHub Pages）
 1. GitHub の **Settings → Pages → Source** を **GitHub Actions** にする（最初の1回だけ）

@@ -3,6 +3,7 @@ import type { CardDef, FixedCard, HistorySession, Settings, Templates, Vacation 
 import { formatMinOfDayAp, formatSpan } from '../time'
 import { FixedCardEditor } from './FixedCardEditor'
 import { TemplatesDialog } from './TemplatesDialog'
+import { DiagnosticsScreen } from './DiagnosticsScreen'
 import { buildBackup, dateKey, mergeHistory, parseBackup } from '../history'
 import { isSpeechSupported, listJaVoices, speakTest } from '../speech'
 import { say } from '../phrases.logic'
@@ -79,6 +80,7 @@ export function SettingsDialog({
   const [voices, setVoices] = useState<string[]>([])
   const active = resolveCharacter(settings, dateKey(Date.now()))
   const [showTemplates, setShowTemplates] = useState(false)
+  const [showDiag, setShowDiag] = useState(false)
   const [editingFixed, setEditingFixed] = useState<FixedCard | 'new' | null>(null)
   const [updateMsg, setUpdateMsg] = useState<string | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -116,6 +118,34 @@ export function SettingsDialog({
   }, [])
 
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => onChange({ ...settings, [k]: v })
+
+  // ふかい画面（どだい・じこくカード編集）は、せっていの上に重ねず、この画面と 入れかえて ひらく
+  if (showTemplates) {
+    return (
+      <TemplatesDialog
+        templates={templates}
+        onTemplates={onTemplates}
+        fixedCards={fixedCards}
+        cards={allCards}
+        vacations={vacations}
+        onVacations={onVacations}
+        onClose={() => setShowTemplates(false)}
+      />
+    )
+  }
+  if (showDiag) return <DiagnosticsScreen onClose={() => setShowDiag(false)} />
+  if (editingFixed) {
+    return (
+      <FixedCardEditor
+        initial={editingFixed === 'new' ? null : editingFixed}
+        onClose={() => setEditingFixed(null)}
+        onSave={(c) => {
+          onFixedCards(fixedCards.some((x) => x.id === c.id) ? fixedCards.map((x) => (x.id === c.id ? c : x)) : [...fixedCards, c])
+          setEditingFixed(null)
+        }}
+      />
+    )
+  }
 
   return (
     <Modal title="せってい" onClose={onClose}>
@@ -273,35 +303,17 @@ export function SettingsDialog({
           >
             🔄 あたらしい バージョンを さがす
           </button>
-          <button type="button" className="big-btn big-btn--sub" onClick={reloadApp}>
+          <button type="button" className="big-btn big-btn--sub" onClick={() => void reloadApp()}>
             ♻️ がめんを よみこみなおす
           </button>
         </div>
         {updateMsg && <small>{updateMsg}</small>}
         <small>きろくは そのまま のこります（よみこみなおしても きえないよ）</small>
+        <button type="button" className="big-btn big-btn--sub" onClick={() => setShowDiag(true)}>
+          🛠 もじが いれられない とき（しんだん）
+        </button>
       </div>
 
-      {showTemplates && (
-        <TemplatesDialog
-          templates={templates}
-          onTemplates={onTemplates}
-          fixedCards={fixedCards}
-          cards={allCards}
-          vacations={vacations}
-          onVacations={onVacations}
-          onClose={() => setShowTemplates(false)}
-        />
-      )}
-      {editingFixed && (
-        <FixedCardEditor
-          initial={editingFixed === 'new' ? null : editingFixed}
-          onClose={() => setEditingFixed(null)}
-          onSave={(c) => {
-            onFixedCards(fixedCards.some((x) => x.id === c.id) ? fixedCards.map((x) => (x.id === c.id ? c : x)) : [...fixedCards, c])
-            setEditingFixed(null)
-          }}
-        />
-      )}
     </Modal>
   )
 }

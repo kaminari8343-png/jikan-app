@@ -8,6 +8,9 @@ import {
   markUpdateReady,
   resetUpdateReady,
   setupUpdates,
+  isNewerVersion,
+  fetchLatestVersion,
+  type VersionInfo,
   type DocumentLike,
   type ServiceWorkerContainerLike,
   type UpdateDeps,
@@ -173,5 +176,120 @@ describe('バージョン表示', () => {
     expect(BUILD.time).toMatch(/^\d{4}-\d{2}-\d{2}T/)
     expect(BUILD.sha.length).toBeGreaterThan(0)
     expect(BUILD.sha.length).toBeLessThanOrEqual(7)
+  })
+})
+
+const V1: VersionInfo = { time: '2026-10-05T11:00:00.000Z', sha: '1111111' }
+const V2: VersionInfo = { time: '2026-10-05T12:00:00.000Z', sha: '2222222' }
+
+describe('version.json で あたらしい版を 見つける（Service Worker が 更新されない iOS 対策）', () => {
+  it('isNewerVersion: 日時が あたらしいときだけ true', () => {
+    expect(isNewerVersion(V2, V1)).toBe(true)
+    expect(isNewerVersion(V1, V1)).toBe(false)
+    expect(isNewerVersion(V1, V2)).toBe(false) // 公開のとちゅうで 古い版が見えても もどらない
+    expect(isNewerVersion({ ...V2, sha: V1.sha }, V1)).toBe(false)
+    expect(isNewerVersion(null, V1)).toBe(false)
+    expect(isNewerVersion({ time: 'へん', sha: '3333333' }, V1)).toBe(false)
+    expect(isNewerVersion(V2, { time: new Date(0).toISOString(), sha: 'dev' })).toBe(false) // 開発用ビルドは くらべない
+  })
+
+  function withVersion(ageMs: number, latest: () => Promise<VersionInfo | null>, hasSw = true) {
+    const sw = hasSw ? new FakeSw(true) : undefined
+    const doc = new FakeDoc()
+    const calls = { reload: 0, notify: 0 }
+    const timers: { fn: () => void; ms: number }[] = []
+    const stop = setupUpdates({
+      sw,
+      doc,
+      now: () => ageMs,
+      reload: () => void calls.reload++,
+      notify: () => void calls.notify++,
+      current: V1,
+      fetchLatest: latest,
+      setIntervalFn: (fn, ms) => (timers.push({ fn, ms }), timers.length),
+      clearIntervalFn: () => {},
+    })
+    return { sw, doc, calls, timers, stop }
+  }
+
+  it('開いて すぐ: あたらしい版が 出ていたら、自動で よみこみなおす（Service Worker が なくても）', async () => {
+    const t = withVersion(2_000, async () => V2, false)
+    await flush()
+    expect(t.calls).toEqual({ reload: 1, notify: 0 })
+    t.stop()
+  })
+
+  it('しばらく開いたままなら、バナーで しらせる。なんども しらべても 1回だけ', async () => {
+    let n = 0
+    const t = withVersion(AUTO_RELOAD_WINDOW_MS + 5_000, async () => (n++, V2))
+    await flush()
+    t.doc.fire()
+    t.timers[0].fn()
+    await flush()
+    expect(t.calls).toEqual({ reload: 0, notify: 1 })
+    expect(n).toBe(1) // 見つけたあとは、もう しらべない
+    t.stop()
+  })
+
+  it('同じ版・古い版・とれないとき（ネットなし）は 何もしない。あとの しらべなおしで 見つかる', async () => {
+    let latest: VersionInfo | null = V1
+    const t = withVersion(60_000, async () => latest)
+    await flush()
+    expect(t.calls).toEqual({ reload: 0, notify: 0 })
+    latest = null
+    t.doc.fire()
+    await flush()
+    expect(t.calls).toEqual({ reload: 0, notify: 0 })
+    latest = V2
+    t.doc.fire()
+    await flush()
+    expect(t.calls).toEqual({ reload: 0, notify: 1 })
+    t.stop()
+  })
+
+  it('しらべる文が エラーを なげても、止まらない', async () => {
+    const t = withVersion(60_000, async () => {
+      throw new Error('offline')
+    })
+    await flush()
+    expect(t.calls).toEqual({ reload: 0, notify: 0 })
+    t.stop()
+  })
+
+  it('Service Worker の切りかわりと version.json の両方で 見つかっても、よみこみは 1回だけ', async () => {
+    const t = withVersion(1_000, async () => V2)
+    await flush()
+    t.sw!.controllerChange()
+    expect(t.calls.reload).toBe(1)
+    t.stop()
+  })
+
+  it('checkNow は version.json も しらべる', async () => {
+    const t = withVersion(60_000, async () => V2, false)
+    await flush()
+    expect(t.calls.notify).toBe(1)
+    expect(await checkNow()).toBe(true)
+    t.stop()
+  })
+
+  it('fetchLatestVersion: キャッシュを つかわず（no-store）に とる。こわれた中身・エラーは null', async () => {
+    const calls: { url: string; init?: RequestInit }[] = []
+    const orig = globalThis.fetch
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, init })
+      return { ok: true, json: async () => V2 }
+    }) as unknown as typeof fetch
+    expect(await fetchLatestVersion('/jikan-app/')).toEqual(V2)
+    expect(calls[0].url).toMatch(/^\/jikan-app\/version\.json\?t=\d+$/)
+    expect(calls[0].init).toMatchObject({ cache: 'no-store' })
+    globalThis.fetch = (async () => ({ ok: true, json: async () => ({ x: 1 }) })) as unknown as typeof fetch
+    expect(await fetchLatestVersion('/')).toBeNull()
+    globalThis.fetch = (async () => ({ ok: false })) as unknown as typeof fetch
+    expect(await fetchLatestVersion('/')).toBeNull()
+    globalThis.fetch = (async () => {
+      throw new Error('offline')
+    }) as unknown as typeof fetch
+    expect(await fetchLatestVersion('/')).toBeNull()
+    globalThis.fetch = orig
   })
 })

@@ -6,6 +6,8 @@
 //      user-select: none / -webkit-touch-callout: none / touch-action: none / pointer-events: none が かかっていない
 //   2. 入力欄へのタッチ・クリックを、だれも preventDefault していない
 //   3. 入力欄は、ドラッグできる部品（dnd-kit）の中に ない。入っていても ドラッグは はじまらない
+//   4. （iOS の standalone = ホーム画面のアプリ 対策）入力欄の祖先に position: fixed / transform / overflow / 100vh などが ない。
+//      ダイアログは 重ね合わせではなく、ふつうの全画面ページ。viewport に user-scalable=no などが ない
 import { createRoot, type Root } from 'react-dom/client'
 import { act, useState } from 'react'
 import { DndContext, MouseSensor, TouchSensor, useDraggable, useSensor, useSensors } from '@dnd-kit/core'
@@ -117,6 +119,50 @@ function findViolations(css: string, root: ParentNode = document): string[] {
   return found
 }
 
+/** iOS の standalone（ホーム画面のアプリ）で、入力欄にキーボードが出なくなる原因に なりやすい、入力欄の祖先の指定 */
+const RISKS: { prop: string; bad: (v: string) => boolean }[] = [
+  { prop: 'position', bad: (v) => v === 'fixed' || v === 'sticky' },
+  { prop: 'transform', bad: (v) => v !== 'none' },
+  { prop: 'will-change', bad: (v) => v !== 'auto' },
+  { prop: 'filter', bad: (v) => v !== 'none' },
+  { prop: 'backdrop-filter', bad: (v) => v !== 'none' },
+  { prop: 'perspective', bad: (v) => v !== 'none' },
+  { prop: 'contain', bad: (v) => v !== 'none' },
+  { prop: 'overflow', bad: (v) => /hidden|auto|scroll|clip/.test(v) },
+  { prop: 'overflow-x', bad: (v) => /hidden|auto|scroll|clip/.test(v) },
+  { prop: 'overflow-y', bad: (v) => /hidden|auto|scroll|clip/.test(v) },
+  { prop: 'height', bad: (v) => /\d(vh|dvh|svh|lvh)\b/.test(v) },
+  { prop: 'min-height', bad: (v) => /\d(vh|dvh|svh|lvh)\b/.test(v) },
+  { prop: 'max-height', bad: (v) => /\d(vh|dvh|svh|lvh)\b/.test(v) },
+  { prop: '-webkit-overflow-scrolling', bad: () => true },
+  { prop: 'overscroll-behavior', bad: (v) => v !== 'auto' },
+]
+
+function findStructuralRisks(css: string, root: ParentNode = document): string[] {
+  const rules = parseCss(css).filter((r) => RISKS.some(({ prop, bad }) => r.decls[prop] !== undefined && bad(r.decls[prop])))
+  const found: string[] = []
+  const controls = Array.from(root.querySelectorAll(CONTROL)).filter((c) => !c.hasAttribute('hidden'))
+  for (const c of controls) {
+    for (let el: Element | null = c; el; el = el.parentElement) {
+      for (const r of rules) {
+        for (const sel of r.selectors) {
+          if (sel.includes('::')) continue
+          let hit = false
+          try {
+            hit = el.matches(sel)
+          } catch {
+            hit = false
+          }
+          if (!hit) continue
+          const which = RISKS.filter(({ prop, bad }) => r.decls[prop] !== undefined && bad(r.decls[prop])).map(({ prop }) => `${prop}: ${r.decls[prop]}`)
+          found.push(`${label(c)} ${el === c ? 'じしん' : `の祖先 ${label(el)}`} に「${sel}」で ${which.join(', ')}`)
+        }
+      }
+    }
+  }
+  return found
+}
+
 describe('CSS: 抑止設定のかけかた', () => {
   it('styles.css を ちゃんと読めている（空だと、ほかの検査が空振りになる）', () => {
     expect(cssText.length).toBeGreaterThan(10_000)
@@ -168,6 +214,31 @@ const click = (el: Element | null | undefined) => {
 const byText = (text: string, scope: ParentNode = document) =>
   Array.from(scope.querySelectorAll('button')).find((b) => b.textContent?.includes(text)) as HTMLElement | undefined
 
+describe('iOS の standalone 対策（入力欄の祖先の構造・viewport）', () => {
+  it('検出器の自己テスト: fixed / transform / overflow / 100vh などを入力欄の祖先にかけると 見つかる', () => {
+    document.body.innerHTML = '<div id="x"><div class="m"><label><input /></label></div></div>'
+    expect(findStructuralRisks('.m{position:fixed}')).toHaveLength(1)
+    expect(findStructuralRisks('#x{transform:translateY(0)}')).toHaveLength(1)
+    expect(findStructuralRisks('.m{overflow:hidden}')).toHaveLength(1)
+    expect(findStructuralRisks('.m{overflow-y:auto}')).toHaveLength(1)
+    expect(findStructuralRisks('body{min-height:100vh}')).toHaveLength(1)
+    expect(findStructuralRisks('.m{max-height:100dvh}')).toHaveLength(1)
+    expect(findStructuralRisks('html,body{overscroll-behavior:none}')).toHaveLength(2)
+    expect(findStructuralRisks('.m{will-change:transform}')).toHaveLength(1)
+    expect(findStructuralRisks('.m{overflow:visible;position:relative;transform:none}')).toHaveLength(0)
+    expect(findStructuralRisks('.other{position:fixed}')).toHaveLength(0)
+    document.body.innerHTML = ''
+  })
+
+  it('index.html の viewport に user-scalable=no / maximum-scale などが ない', () => {
+    const html = readFileSync(resolve(process.cwd(), 'index.html'), 'utf8')
+    const viewport = /<meta[^>]+name="viewport"[^>]+content="([^"]*)"/.exec(html)?.[1] ?? ''
+    expect(viewport).toContain('width=device-width')
+    expect(viewport).toContain('viewport-fit=cover')
+    expect(viewport).not.toMatch(/user-scalable|maximum-scale|minimum-scale/)
+  })
+})
+
 describe('実際の画面の入力欄', () => {
   let root: Root
   let host: HTMLElement
@@ -179,6 +250,8 @@ describe('実際の画面の入力欄', () => {
     seen.set(name, controls)
     // 1. 入力欄と祖先に 抑止設定が かかっていない
     expect(findViolations(cssText), name).toEqual([])
+    // 4. 入力欄の祖先に position: fixed / transform / overflow / 100vh などが ない（iOS の standalone 対策）
+    expect(findStructuralRisks(cssText), name).toEqual([])
     // 3. 入力欄は ドラッグできる部品の中にない
     for (const c of controls) {
       expect(c.closest('[aria-roledescription="sortable"], [aria-roledescription="draggable"]'), `${name}: ${label(c)}`).toBeNull()
@@ -201,6 +274,7 @@ describe('実際の画面の入力欄', () => {
     ;(globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= stub
     ;(globalThis as { IntersectionObserver?: unknown }).IntersectionObserver ??= stub
     localStorage.clear()
+    window.scrollTo = () => {} // jsdom には ない
     document.documentElement.setAttribute('lang', 'ja')
     host = document.createElement('div')
     host.id = 'root'
@@ -223,6 +297,9 @@ describe('実際の画面の入力欄', () => {
 
   it('「＋じぶんで つくる」（カスタムカード）: なまえの入力欄', () => {
     click(byText('じぶんで'))
+    // ダイアログは 全画面のページ。うしろの よてい画面・ドラッグ部品は ない
+    expect(document.querySelector('.page')).not.toBeNull()
+    expect(document.querySelector('.plan-area, .palette, [aria-roledescription]')).toBeNull()
     inspect('じぶんでつくる')
     const inputs = seen.get('じぶんでつくる')!
     expect(inputs.some((c) => c.tagName === 'INPUT' && (c as HTMLInputElement).placeholder.includes('ピアノ'))).toBe(true)
@@ -267,8 +344,25 @@ describe('実際の画面の入力欄', () => {
     expect(tpl.some((c) => (c as HTMLInputElement).type === 'time')).toBe(true)
     expect(tpl.some((c) => (c as HTMLInputElement).type === 'date')).toBe(true)
     expect(tpl.some((c) => c.tagName === 'INPUT' && (c as HTMLInputElement).getAttribute('aria-label') === 'やすみの なまえ')).toBe(true)
-    close()
-    close()
+    close() // どだい → せってい
+
+    // 入力しんだん（原因さがし用の画面）
+    click(byText('もじが いれられない とき'))
+    inspect('にゅうりょく しんだん')
+    const diag = seen.get('にゅうりょく しんだん')!
+    expect(diag.some((c) => c.tagName === 'INPUT')).toBe(true)
+    expect(diag.some((c) => c.tagName === 'TEXTAREA')).toBe(true)
+    // さわると ログに のこる（だれかが止めていれば ⚠ が つく）
+    const log = document.querySelector('[aria-label="ログ"]')!
+    expect(log.textContent).toContain('click')
+    expect(log.textContent).not.toContain('止められた')
+    close() // しんだん → せってい
+    close() // せってい → メイン
+  })
+
+  it('ダイアログを とじると、よてい画面にもどる（ひらく前の画面）', () => {
+    expect(document.querySelector('.page')).toBeNull()
+    expect(document.querySelector('.plan-area')).not.toBeNull()
   })
 
   it('どの画面でも、入力欄の祖先に data-no-drag（モーダル）がある or ドラッグ部品の外にある', () => {
