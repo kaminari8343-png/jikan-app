@@ -1,4 +1,5 @@
 import { DEFAULT_CHARACTER_ID, getCharacter, type Character, type PhraseKey } from './phrases'
+import { readingOf } from './readings'
 import { clockToKana, minutesToKana } from './time'
 
 export interface PhraseVars {
@@ -17,14 +18,14 @@ export function toKatakana(s: string): string {
 }
 
 /**
- * セリフの穴うめ。{min} は分をかなの読みに直して入れる。
+ * セリフの穴うめ。{min} は分をかなの読みに直して入れる。カードの名前は、readings.ts に登録した読みかたで話す。
  * character を わたすと、そのキャラのセリフ（ロボットなら カタカナ）で話す。
  */
 export function say(key: PhraseKey, vars: PhraseVars = {}, character: Character = getCharacter(DEFAULT_CHARACTER_ID)): string {
   const text = character.phrases[key]
-    .replaceAll('{name}', vars.name ?? '')
-    .replaceAll('{next}', vars.next ?? '')
-    .replaceAll('{fixed}', vars.fixed ?? '')
+    .replaceAll('{name}', vars.name ? readingOf(vars.name) : '')
+    .replaceAll('{next}', vars.next ? readingOf(vars.next) : '')
+    .replaceAll('{fixed}', vars.fixed ? readingOf(vars.fixed) : '')
     .replaceAll('{time}', vars.clock != null ? clockToKana(vars.clock) : '')
     .replaceAll('{min}', vars.minutes != null ? minutesToKana(vars.minutes) : '')
   return character.kana === 'katakana' ? toKatakana(text) : text
