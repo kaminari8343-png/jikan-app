@@ -8,6 +8,8 @@ import { isSpeechSupported, listJaVoices, speakTest } from '../speech'
 import { say } from '../phrases.logic'
 import { SAMPLE, type Character } from '../phrases'
 import { resolveCharacter } from '../voiceSettings'
+import { READINGS } from '../readings'
+import { PRESET_CARDS } from '../cards'
 import { CharacterPicker } from './CharacterPicker'
 import { Modal } from './Modal'
 
@@ -36,6 +38,9 @@ const TESTS: { label: string; text: (ch: Character) => string }[] = [
   { label: 'でかける 1ぷんまえ', text: (ch) => say('leaveSoon', { fixed: 'いえをでる', minutes: 1 }, ch) },
   { label: 'いってらっしゃい', text: (ch) => say('leaveNow', {}, ch) },
 ]
+
+/** 読みかたを 登録してあるカード（パレットのカードのうち、readings.ts に名前がのっているもの）。ためしにきく ボタンに なる */
+const READING_TESTS = PRESET_CARDS.filter((c) => c.name in READINGS)
 
 export function SettingsDialog({
   settings,
@@ -139,6 +144,24 @@ export function SettingsDialog({
           ))}
         </div>
         <small>えらんだ キャラの セリフで ならすよ。セリフは src/phrases/ の キャラごとの ファイルで かえられます</small>
+      </div>
+
+      <div className="field">
+        <span>カードの よみかた（まちがって よまれないか きいてね）　{active.emoji} {active.name}</span>
+        <div className="test-grid">
+          {READING_TESTS.map((card) => (
+            <button
+              key={card.id}
+              type="button"
+              className="big-btn big-btn--sub"
+              aria-label={`${card.name} の よみかた`}
+              onClick={() => speakTest(say('start', { name: card.name, minutes: card.minutes }, active), active)}
+            >
+              {card.emoji} {card.name}
+            </button>
+          ))}
+        </div>
+        <small>よみかたは src/readings.ts に とうろくしてあります（ふえたカードは そこに たすだけ）</small>
       </div>
 
       <div className="field">

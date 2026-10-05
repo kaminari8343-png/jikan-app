@@ -5,6 +5,11 @@ export const PRESET_CARDS: CardDef[] = [
   { id: 'homework', name: 'しゅくだい', emoji: '✏️', color: '#ffb84d', minutes: 15 },
   { id: 'snack', name: 'おやつ', emoji: '🍪', color: '#ff9eb5', minutes: 10 },
   { id: 'game', name: 'ゲーム', emoji: '🎮', color: '#8ab4ff', minutes: 20 },
+  // みるもの（名前はカタカナ。絵文字で区別する。サービスのロゴは使わない）。読み上げの読みかたは readings.ts
+  { id: 'netflix', name: 'ネットフリックス', emoji: '🎬', color: '#ff6b6b', minutes: 30 },
+  { id: 'unext', name: 'ユーネクスト', emoji: '🍿', color: '#4dd0e1', minutes: 30 },
+  { id: 'tv', name: 'テレビ', emoji: '📺', color: '#d4e157', minutes: 30 },
+  { id: 'youtube', name: 'ユーチューブ', emoji: '▶️', color: '#e07be0', minutes: 30 },
   { id: 'prepare', name: 'あしたのじゅんび', emoji: '🎒', color: '#c4a1ff', minutes: 10 },
 ]
 
