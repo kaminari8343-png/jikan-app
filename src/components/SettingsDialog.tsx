@@ -10,6 +10,8 @@ import { SAMPLE, type Character } from '../phrases'
 import { resolveCharacter } from '../voiceSettings'
 import { READINGS } from '../readings'
 import { PRESET_CARDS } from '../cards'
+import { BUILD, formatBuild } from '../buildInfo'
+import { checkNow, reloadApp } from '../updates'
 import { CharacterPicker } from './CharacterPicker'
 import { Modal } from './Modal'
 
@@ -78,6 +80,7 @@ export function SettingsDialog({
   const active = resolveCharacter(settings, dateKey(Date.now()))
   const [showTemplates, setShowTemplates] = useState(false)
   const [editingFixed, setEditingFixed] = useState<FixedCard | 'new' | null>(null)
+  const [updateMsg, setUpdateMsg] = useState<string | null>(null)
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const exportHistory = () => {
@@ -255,6 +258,29 @@ export function SettingsDialog({
           </ul>
         </div>
       )}
+      <div className="field">
+        <span>アプリの バージョン</span>
+        <small>いまの バージョン: {formatBuild(BUILD)}</small>
+        <div className="test-grid">
+          <button
+            type="button"
+            className="big-btn big-btn--sub"
+            onClick={async () => {
+              setUpdateMsg('さがしているよ…')
+              const ok = await checkNow()
+              setUpdateMsg(ok ? 'さがしたよ。あたらしい バージョンが あれば、がめんの うえに おしらせが でるよ' : 'いまは さがせないよ（ネットに つながっているか みてね）')
+            }}
+          >
+            🔄 あたらしい バージョンを さがす
+          </button>
+          <button type="button" className="big-btn big-btn--sub" onClick={reloadApp}>
+            ♻️ がめんを よみこみなおす
+          </button>
+        </div>
+        {updateMsg && <small>{updateMsg}</small>}
+        <small>きろくは そのまま のこります（よみこみなおしても きえないよ）</small>
+      </div>
+
       {showTemplates && (
         <TemplatesDialog
           templates={templates}
