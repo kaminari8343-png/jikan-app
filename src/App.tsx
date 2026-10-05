@@ -10,6 +10,8 @@ import { dayInfo, pruneOverrides, toggleDayOverride, weekdayOfKey } from './cale
 import { prunePlans, syncAllPlans, withDayPlan, type Plans } from './plans'
 import { migrateFixedCards, normalizeTemplates, planFromTemplate, purgeFixedCard, templateFor } from './templates'
 import { DayBar, type DayTab } from './components/DayBar'
+import { UpdateBanner } from './components/UpdateBanner'
+import { BUILD, formatBuild } from './buildInfo'
 import { PresetsDialog } from './components/PresetsDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { useNow } from './hooks'
@@ -163,10 +165,18 @@ export function App() {
 
   if (run) return <Runner run={run} onChange={updateRun} onExit={exitRun} />
 
-  if (screen === 'history') return <HistoryScreen sessions={history} now={now} onBack={() => setScreen('plan')} />
+  if (screen === 'history') {
+    return (
+      <>
+        <UpdateBanner />
+        <HistoryScreen sessions={history} now={now} onBack={() => setScreen('plan')} />
+      </>
+    )
+  }
 
   return (
     <main className="app">
+      <UpdateBanner />
       <header className="top">
         <h1>{isToday ? 'きょうのよてい' : 'あしたのよてい'}</h1>
         <div className="top__buttons">
@@ -222,6 +232,8 @@ export function App() {
           </div>
         </div>
       </div>
+
+      <p className="build-info">バージョン {formatBuild(BUILD)}</p>
 
       {dialog === 'card' && (
         <CardEditor

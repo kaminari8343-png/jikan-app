@@ -5,8 +5,13 @@ import { VitePWA } from 'vite-plugin-pwa'
 // GitHub Pages のリポジトリ名に合わせる（https://<user>.github.io/jikan-app/）
 const REPO_NAME = 'jikan-app'
 
+// ビルドした日時と、コミットの短い番号（GitHub Actions の GITHUB_SHA）。画面の「バージョン」に出して、
+// 「いま見ている画面が、いつの版か」を たしかめられるようにする（キャッシュで古い版のままか、見わけるため）
+const BUILD = { time: new Date().toISOString(), sha: (process.env.GITHUB_SHA ?? 'dev').slice(0, 7) }
+
 export default defineConfig({
   base: `/${REPO_NAME}/`,
+  define: { __BUILD__: JSON.stringify(BUILD) },
   plugins: [
     react(),
     VitePWA({
