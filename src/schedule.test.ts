@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTimeline, insertAtBlockEnd, insertFixed, insertNormalSmart, runSectors, sortFixedSlots, syncFixed, timelineSectors } from './schedule'
+import { buildTimeline, insertAtBlockEnd, insertFixed, insertNormalSmart, insertAfterFixed, moveItem, runSectors, sortFixedSlots, syncFixed, timelineSectors } from './schedule'
 import { startRun, rateCard, tick } from './runner'
 import type { FixedCard, PlanItem } from './types'
 
@@ -159,5 +159,28 @@ describe('時計の扇形', () => {
     expect(s.find((x) => x.active)).toMatchObject({ kind: 'free', endMs: at(18, 30) })
     const fx = tick(free, at(18, 30)).run
     expect(runSectors(fx, at(18, 40)).find((x) => x.active)).toMatchObject({ kind: 'fixed', startMs: at(18, 30), endMs: at(19, 0) })
+  })
+})
+
+describe('moveItem（↑↓ボタン）/ insertAfterFixed', () => {
+  const list = [normal('a', 5), normal('b', 5), dinner, normal('c', 5), bed]
+  const names = (l: PlanItem[]) => l.map((i) => i.name)
+  it('ブロックの中では となりと入れかわる', () => {
+    expect(names(moveItem(list, 'b', -1))).toEqual(['b', 'a', 'ゆうごはん', 'c', 'ねる'])
+    expect(names(moveItem(list, 'a', 1))).toEqual(['b', 'a', 'ゆうごはん', 'c', 'ねる'])
+  })
+  it('ブロックのはしでは、じこくカードをこえて となりのブロックへ入る', () => {
+    const down = moveItem(list, 'b', 1)
+    expect(names(down)).toEqual(['a', 'ゆうごはん', 'b', 'c', 'ねる'])
+    expect(buildTimeline(down, at(18, 0), DAY).blocks[1].rows.map((r) => r.item.name)).toEqual(['b', 'c'])
+    expect(names(moveItem(list, 'c', -1))).toEqual(['a', 'b', 'c', 'ゆうごはん', 'ねる'])
+  })
+  it('いちばん上／下では 動かない。じこくカードは動かせない', () => {
+    expect(moveItem(list, 'a', -1)).toBe(list)
+    expect(moveItem(list, 'ねる', 1)).toBe(list)
+    expect(moveItem(list, 'ゆうごはん', 1)).toBe(list)
+  })
+  it('じこくカードの すぐ下に入れられる', () => {
+    expect(names(insertAfterFixed(list, normal('x', 5), 'ゆうごはん'))).toEqual(['a', 'b', 'ゆうごはん', 'x', 'c', 'ねる'])
   })
 })
