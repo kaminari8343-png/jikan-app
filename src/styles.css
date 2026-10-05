@@ -193,8 +193,6 @@ input {
   padding: 10px 10px 10px 8px;
   border-radius: 18px;
   box-shadow: var(--shadow);
-  touch-action: none;
-  cursor: grab;
   position: relative;
   flex-wrap: wrap;
 }
@@ -205,8 +203,62 @@ input {
   padding: 14px 20px;
   gap: 12px;
   font-size: 22px;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.25);
-  transform: rotate(-2deg);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.3);
+  transform: scale(1.05) rotate(-1.5deg);
+  animation: lift 0.15s ease-out;
+}
+@keyframes lift {
+  from { transform: scale(1); box-shadow: var(--shadow); }
+}
+.plan-row--dropped {
+  animation: drop-pop 0.35s ease-out;
+}
+@keyframes drop-pop {
+  0% { transform: scale(1.06); }
+  60% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+/* 「≡」のつまみ: ここだけ スクロールを とめて、すぐ ドラッグできる */
+.drag-handle {
+  align-self: stretch;
+  min-width: 52px;
+  margin: -4px -4px -4px 0;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.5);
+  font-size: 30px;
+  line-height: 1;
+  touch-action: none;
+  cursor: grab;
+}
+.move-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.move-btn {
+  min-width: 44px;
+  min-height: 34px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.7);
+  font-size: 20px;
+  font-weight: 700;
+}
+.move-btn:disabled {
+  opacity: 0.3;
+}
+.drop-spot {
+  margin: 2px 0;
+  padding: 10px;
+  border: 3px dashed var(--accent);
+  border-radius: 14px;
+  text-align: center;
+  font-size: 16px;
+  opacity: 0.7;
+}
+.drop-spot--over {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.8);
+  outline: 3px solid var(--accent);
 }
 .plan-row__handle {
   font-size: 26px;

@@ -167,7 +167,12 @@ describe('CSS: 抑止設定のかけかた', () => {
   it('styles.css を ちゃんと読めている（空だと、ほかの検査が空振りになる）', () => {
     expect(cssText.length).toBeGreaterThan(10_000)
     expect(parseCss(cssText).length).toBeGreaterThan(200)
-    expect(parseCss(cssText).some((r) => r.selectors.includes('.plan-row') && r.decls['touch-action'] === 'none')).toBe(true)
+    expect(parseCss(cssText).some((r) => r.selectors.includes('.drag-handle') && r.decls['touch-action'] === 'none')).toBe(true)
+  })
+  it('列のカードの本体はスクロールできる。つまみ（≡）だけ touch-action: none', () => {
+    const rules = parseCss(cssText)
+    expect(rules.some((r) => r.selectors.includes('.plan-row') && r.decls['touch-action'] === 'none')).toBe(false)
+    expect(rules.some((r) => r.selectors.includes('.drag-handle') && r.decls['touch-action'] === 'none')).toBe(true)
   })
   it('html・body・:root・* には user-select: none などを かけていない', () => {
     const bad = parseCss(cssText).filter(

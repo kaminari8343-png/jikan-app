@@ -13,10 +13,19 @@ export function isInteractiveTarget(target: EventTarget | null): boolean {
 
 type Handler<E> = (event: { nativeEvent: E }, options: { onActivation?: (arg: { event: E }) => void }) => boolean
 
+/** 「≡」のつまみ（ここからは、長押しなしで すぐドラッグできる） */
+export const HANDLE_SELECTOR = '[data-drag-handle]'
+const inHandle = (t: EventTarget | null) => t instanceof Element && t.closest(HANDLE_SELECTOR) !== null
+
 const guard =
-  <E extends Event>(handler: Handler<E>): Handler<E> =>
-  (event, options) =>
-    isInteractiveTarget(event.nativeEvent.target) ? false : handler(event, options)
+  <E extends Event>(handler: Handler<E>, only?: 'handle' | 'body'): Handler<E> =>
+  (event, options) => {
+    const t = event.nativeEvent.target
+    if (isInteractiveTarget(t)) return false
+    if (only === 'handle' && !inHandle(t)) return false
+    if (only === 'body' && inHandle(t)) return false
+    return handler(event, options)
+  }
 
 export class SafeMouseSensor extends MouseSensor {
   static activators = MouseSensor.activators.map((a) => ({
@@ -28,6 +37,14 @@ export class SafeMouseSensor extends MouseSensor {
 export class SafeTouchSensor extends TouchSensor {
   static activators = TouchSensor.activators.map((a) => ({
     ...a,
-    handler: guard(a.handler as unknown as Handler<TouchEvent>),
+    handler: guard(a.handler as unknown as Handler<TouchEvent>, 'body'),
+  })) as typeof TouchSensor.activators
+}
+
+/** つまみ専用: さわったら すぐ はじまる（ほんの少し動いたら） */
+export class HandleTouchSensor extends TouchSensor {
+  static activators = TouchSensor.activators.map((a) => ({
+    ...a,
+    handler: guard(a.handler as unknown as Handler<TouchEvent>, 'handle'),
   })) as typeof TouchSensor.activators
 }

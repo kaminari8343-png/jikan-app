@@ -181,6 +181,25 @@ export function insertAtBlockEnd(items: PlanItem[], item: PlanItem, fixedUid: st
   return next
 }
 
+/** ↑↓ボタン: uid のカードを 1つ上(-1)／下(+1)へ。となりが じこくカードなら、それを こえて となりのブロックへ入る */
+export function moveItem(items: PlanItem[], uid: string, dir: -1 | 1): PlanItem[] {
+  const from = items.findIndex((i) => i.uid === uid)
+  const to = from + dir
+  if (from < 0 || to < 0 || to >= items.length || isFixed(items[from])) return items
+  const next = [...items]
+  next[from] = items[to]
+  next[to] = items[from]
+  return next
+}
+
+/** じこくカードの すぐ下（つぎのブロックの さいしょ）に入れる */
+export function insertAfterFixed(items: PlanItem[], item: PlanItem, fixedUid: string): PlanItem[] {
+  const at = items.findIndex((it) => it.uid === fixedUid)
+  const next = [...items]
+  next.splice(at < 0 ? items.length : at + 1, 0, item)
+  return next
+}
+
 /** タップで入れるとき: 入りきる いちばん早いブロックへ。どこも入らなければ、いちばん早いブロックへ（赤くなる） */
 export function insertNormalSmart(items: PlanItem[], item: PlanItem, startAt: number, dayStartMs: number): PlanItem[] {
   const tl = buildTimeline(items, startAt, dayStartMs)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -18,21 +18,24 @@ import type { CardDef, FixedCard, PlanItem } from '../types'
 import { MAX_MINUTES, MIN_MINUTES } from '../cards'
 import { formatClock, formatClockAp, formatMinOfDay, formatMinOfDayAp, formatMinutes, formatSpan, minuteOfDay } from '../time'
 import {
+  insertAfterFixed,
   insertAtBlockEnd,
   insertFixed,
   insertNormalSmart,
   isEndOfDay,
   isFixed,
   isMoment,
+  moveItem,
   type Block,
   type Timeline,
 } from '../schedule'
 import { StepButton } from './StepButton'
-import { SafeMouseSensor, SafeTouchSensor } from '../dndSensors'
+import { HandleTouchSensor, SafeMouseSensor, SafeTouchSensor } from '../dndSensors'
 
 const PALETTE_ZONE = 'palette-zone'
 const LIST_ZONE = 'list-zone'
 const BLOCK_PREFIX = 'block:'
+const AFTER_PREFIX = 'after:'
 
 const collision: CollisionDetection = (args) => {
   const hits = pointerWithin(args)
@@ -81,27 +84,42 @@ interface Props {
 }
 
 export function Planner({
-  now,
+  now: liveNow,
   cards,
   fixedCards,
   items,
-  timeline,
+  timeline: liveTimeline,
   startMin,
   startAt,
   dayStartMs,
   isToday,
-  nowMs,
+  nowMs: liveNowMs,
   defaultStartMin,
   onStartMin,
   onChange,
   onCreateCard,
 }: Props) {
   const [dragging, setDragging] = useState<Dragging>(null)
+  const [droppedUid, setDroppedUid] = useState<string | null>(null)
+
+  // ドラッグ中は 時刻・じゆうじかんの計算を 止める（指をはなしたときに ひとまとめで計算しなおす）
+  const live = { now: liveNow, timeline: liveTimeline, nowMs: liveNowMs }
+  const frozen = useRef(live)
+  if (!dragging) frozen.current = live
+  const { now, timeline, nowMs } = dragging ? frozen.current : live
+
+  useEffect(() => {
+    if (!droppedUid) return
+    const t = setTimeout(() => setDroppedUid(null), 400)
+    return () => clearTimeout(t)
+  }, [droppedUid])
 
   const sensors = useSensors(
-    useSensor(SafeMouseSensor, { activationConstraint: { distance: 6 } }),
-    // さわってすぐ動かすとスクロール、ちょっと押さえると ドラッグ
+    useSensor(SafeMouseSensor, { activationConstraint: { distance: 4 } }),
+    // やることカード: さわってすぐ動かすとスクロール、ちょっと押さえると ドラッグ
     useSensor(SafeTouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
+    // 列の「≡」つまみ: 長押しなしで すぐドラッグ
+    useSensor(HandleTouchSensor, { activationConstraint: { distance: 3 } }),
   )
 
   const addNormal = (card: CardDef) => onChange(insertNormalSmart(items, newItem(card), startAt, dayStartMs))
@@ -122,6 +140,7 @@ export function Planner({
       const item = items.find((i) => i.uid === id)
       setDragging(item ? { kind: 'item', item } : null)
     }
+    navigator.vibrate?.(12)
   }
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -144,6 +163,10 @@ export function Planner({
         onChange(insertAtBlockEnd(items, newItem(card), overId.slice(BLOCK_PREFIX.length)))
         return
       }
+      if (overId.startsWith(AFTER_PREFIX)) {
+        onChange(insertAfterFixed(items, newItem(card), overId.slice(AFTER_PREFIX.length)))
+        return
+      }
       const overIdx = items.findIndex((i) => i.uid === over.id)
       if (overIdx < 0) return addNormal(card)
       const activeRect = active.rect.current.translated
@@ -161,9 +184,16 @@ export function Planner({
       return
     }
     const overId = String(over.id)
+    setDroppedUid(id)
+    navigator.vibrate?.(8)
     if (overId.startsWith(BLOCK_PREFIX)) {
       const moving = items.find((i) => i.uid === id)
       if (moving) onChange(insertAtBlockEnd(items.filter((i) => i.uid !== id), moving, overId.slice(BLOCK_PREFIX.length)))
+      return
+    }
+    if (overId.startsWith(AFTER_PREFIX)) {
+      const moving = items.find((i) => i.uid === id)
+      if (moving) onChange(insertAfterFixed(items.filter((i) => i.uid !== id), moving, overId.slice(AFTER_PREFIX.length)))
       return
     }
     const from = items.findIndex((i) => i.uid === id)
@@ -187,6 +217,7 @@ export function Planner({
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       onDragCancel={() => setDragging(null)}
+      autoScroll={{ threshold: { x: 0.1, y: 0.22 }, acceleration: 18 }}
     >
       <section className="plan-area" aria-label="きょうのよてい">
         <StartTime now={now} isToday={isToday} defaultMin={defaultStartMin} startMin={startMin} onChange={onStartMin} />
@@ -194,6 +225,11 @@ export function Planner({
           items={items}
           timeline={timeline}
           dragging={dragging}
+          droppedUid={droppedUid}
+          onMove={(uid, dir) => {
+            onChange(moveItem(items, uid, dir))
+            setDroppedUid(uid)
+          }}
           fadePast={isToday}
           nowMs={nowMs}
           onMinutes={setMinutes}
@@ -277,13 +313,16 @@ function PlanList(props: {
   items: PlanItem[]
   timeline: Timeline
   dragging: Dragging
+  droppedUid: string | null
+  onMove: (uid: string, dir: -1 | 1) => void
   fadePast: boolean
   nowMs: number
   onMinutes: (uid: string, delta: number) => void
   onRemove: (uid: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: LIST_ZONE })
-  const { items, timeline, dragging, fadePast, nowMs } = props
+  const { items, timeline, dragging, fadePast, nowMs, droppedUid } = props
+  const dragOn = dragging?.kind === 'item' || dragging?.kind === 'card'
   const blockOf = new Map<string, Block>()
   for (const b of timeline.blocks) if (b.fixed) blockOf.set(b.fixed.uid, b)
   return (
@@ -295,7 +334,7 @@ function PlanList(props: {
             const block = blockOf.get(item.uid)
             return (
               <div key={item.uid} className="plan-group">
-                {block && <BlockFooter block={block} fixed={item} />}
+                {block && <BlockFooter block={block} fixed={item} dragOn={dragOn} />}
                 <FixedRow
                   item={item}
                   startMs={row?.startMs}
@@ -303,14 +342,20 @@ function PlanList(props: {
                   past={fadePast && row != null && (isMoment(item) ? row.startMs : row.endMs) <= nowMs}
                   onRemove={props.onRemove}
                 />
+                {dragOn && <AfterSpot fixed={item} />}
               </div>
             )
           }
           const pastEnd = timeline.blocks.some((b) => b.pastEnd && b.rows.some((r) => r.item.uid === item.uid))
+          const idx = items.indexOf(item)
           return (
             <PlanRow
               key={item.uid}
               item={item}
+              dropped={droppedUid === item.uid}
+              canUp={idx > 0}
+              canDown={idx < items.length - 1}
+              onMove={props.onMove}
               startMs={row?.past ? undefined : row?.startMs}
               faded={!!row?.past}
               late={pastEnd}
@@ -331,12 +376,19 @@ function PlanList(props: {
 }
 
 /** ブロックの おわりに出る「じゆうじかん」と、のこり時間 */
-function BlockFooter({ block, fixed }: { block: Block; fixed: PlanItem }) {
+function BlockFooter({ block, fixed, dragOn }: { block: Block; fixed: PlanItem; dragOn: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: BLOCK_PREFIX + fixed.uid })
   const free = block.freeMs ?? 0
   const freeMin = Math.floor(free / 60_000)
   // もう過ぎたブロックと、カードも あきじかんも ないブロック（いえをでる〜がっこう など）は、何も出さない
-  if (block.past || (block.rows.length === 0 && freeMin < 1 && !block.passed)) return <div ref={setNodeRef} className="block-footer--none" />
+  if (block.past || (block.rows.length === 0 && freeMin < 1 && !block.passed)) {
+    if (!dragOn) return <div ref={setNodeRef} className="block-footer--none" />
+    return (
+      <div ref={setNodeRef} className={`drop-spot${isOver ? ' drop-spot--over' : ''}`}>
+        ⬇ {fixed.name}の まえに いれる
+      </div>
+    )
+  }
   let cls = 'block-footer'
   let body
   if (block.passed) {
@@ -386,6 +438,16 @@ function BlockFooter({ block, fixed }: { block: Block; fixed: PlanItem }) {
   return (
     <div ref={setNodeRef} className={`${cls}${isOver ? ' block-footer--drop' : ''}`}>
       {body}
+    </div>
+  )
+}
+
+/** じこくカードの すぐ下（つぎのブロックの さいしょ）に落とす場所 */
+function AfterSpot({ fixed }: { fixed: PlanItem }) {
+  const { setNodeRef, isOver } = useDroppable({ id: AFTER_PREFIX + fixed.uid })
+  return (
+    <div ref={setNodeRef} className={`drop-spot${isOver ? ' drop-spot--over' : ''}`}>
+      ⬇ {fixed.name}の あとに いれる
     </div>
   )
 }
@@ -454,6 +516,10 @@ function PlanRow({
   startMs,
   faded,
   late,
+  dropped,
+  canUp,
+  canDown,
+  onMove,
   onMinutes,
   onRemove,
 }: {
@@ -462,21 +528,24 @@ function PlanRow({
   /** もう過ぎたブロックのカード（うすく表示） */
   faded?: boolean
   late?: boolean
+  /** いま 落としたばかり（ぽんと はねる） */
+  dropped?: boolean
+  canUp: boolean
+  canDown: boolean
+  onMove: (uid: string, dir: -1 | 1) => void
   onMinutes: (uid: string, delta: number) => void
   onRemove: (uid: string) => void
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: item.uid })
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.uid,
+    transition: { duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' },
+  })
   return (
     <div
       ref={setNodeRef}
-      className={`plan-row${isDragging ? ' plan-row--ghost' : ''}${late ? ' plan-row--late' : ''}${faded ? ' plan-row--past' : ''}`}
+      className={`plan-row${isDragging ? ' plan-row--ghost' : ''}${late ? ' plan-row--late' : ''}${faded ? ' plan-row--past' : ''}${dropped ? ' plan-row--dropped' : ''}`}
       style={{ background: item.color, transform: CSS.Transform.toString(transform), transition }}
-      {...attributes}
-      {...listeners}
     >
-      <span className="plan-row__handle" aria-hidden>
-        ⠿
-      </span>
       <span className="plan-row__emoji" aria-hidden>
         {item.emoji}
       </span>
@@ -489,16 +558,27 @@ function PlanRow({
         <span className="stepper__value">{formatMinutes(item.minutes)}</span>
         <StepButton label="＋" ariaLabel={`${item.name} 1ぷん ふやす`} direction={1} onStep={(d) => onMinutes(item.uid, d)} />
       </span>
+      <span className="move-btns">
+        <button type="button" className="move-btn" aria-label={`${item.name} を うえへ`} disabled={!canUp} onClick={() => onMove(item.uid, -1)}>
+          ↑
+        </button>
+        <button type="button" className="move-btn" aria-label={`${item.name} を したへ`} disabled={!canDown} onClick={() => onMove(item.uid, 1)}>
+          ↓
+        </button>
+      </span>
+      <button type="button" className="remove-btn" aria-label={`${item.name} をけす`} onClick={() => onRemove(item.uid)}>
+        ✕
+      </button>
       <button
         type="button"
-        className="remove-btn"
-        aria-label={`${item.name} をけす`}
-        onPointerDown={(e) => e.stopPropagation()}
-        onMouseDown={(e) => e.stopPropagation()}
-        onTouchStart={(e) => e.stopPropagation()}
-        onClick={() => onRemove(item.uid)}
+        ref={setActivatorNodeRef}
+        className="drag-handle"
+        data-drag-handle
+        aria-label={`${item.name} を ならびかえ（つまんで うごかす）`}
+        {...attributes}
+        {...listeners}
       >
-        ✕
+        ≡
       </button>
     </div>
   )
