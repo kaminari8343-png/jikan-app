@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_FIXED_CARDS, MORNING_CARDS, PRESET_CARDS } from './cards'
 import { AnalogClock } from './components/AnalogClock'
 import { CardEditor } from './components/CardEditor'
@@ -55,6 +55,19 @@ export function App() {
   // 声の設定: 前のバージョンの保存データも、いまの形（キャラ・調整）にそろえて読みこむ
   const [settings, setSettings] = useState<Settings>(() => normalizeSettings(load<unknown>('settings', null)))
   const [dialog, setDialog] = useState<Dialog>(null)
+  // ダイアログは 全画面のページ。ひらく前の スクロール位置をおぼえて、とじたら もどす
+  const savedScroll = useRef<number | null>(null)
+  const openDialog = (d: Exclude<Dialog, null>) => {
+    savedScroll.current = window.scrollY
+    setDialog(d)
+  }
+  useEffect(() => {
+    if (dialog === null && savedScroll.current !== null) {
+      const y = savedScroll.current
+      savedScroll.current = null
+      requestAnimationFrame(() => window.scrollTo(0, y))
+    }
+  }, [dialog])
   // じっこう中の状態は、リロードしても続けられるよう保存する
   const [run, setRun] = useState<RunState | null>(() => normalizeRun(load<unknown>('run', null)))
   const [history, setHistory] = useStored<HistorySession[]>('history', [])
@@ -174,6 +187,61 @@ export function App() {
     )
   }
 
+  // ダイアログがひらいている間は、そのページだけを出す（うしろの よてい画面・ドラッグ部品は ない）
+  if (dialog) {
+    return (
+      <>
+        {dialog === 'card' && (
+          <CardEditor
+            onClose={() => setDialog(null)}
+            onSave={(c) => {
+              setCustomCards([...customCards, c])
+              setDialog(null)
+            }}
+          />
+        )}
+        {dialog === 'presets' && (
+          <PresetsDialog
+            current={plan}
+            presets={presets}
+            onClose={() => setDialog(null)}
+            onSave={(name) =>
+              setPresets([
+                ...presets,
+                { id: crypto.randomUUID(), name, startMin, items: plan.map(({ uid: _uid, ...rest }) => rest) },
+              ])
+            }
+            onLoad={(p) => {
+              // じこくカードは、いまの設定（時刻・名前）にそろえる
+              setPlan(syncFixed(p.items.map((i) => ({ ...i, uid: crypto.randomUUID() })), fixedCards))
+              setStartMins((s) => ({ ...s, [selKey]: p.startMin ?? null }))
+              setDialog(null)
+            }}
+            onDelete={(id) => setPresets(presets.filter((p) => p.id !== id))}
+          />
+        )}
+        {dialog === 'settings' && (
+          <SettingsDialog
+            settings={settings}
+            onChange={setSettings}
+            history={history}
+            onImportHistory={setHistory}
+            fixedCards={fixedCards}
+            onFixedCards={updateFixedCards}
+            templates={templates}
+            onTemplates={setTemplates}
+            vacations={vacations}
+            onVacations={setVacations}
+            allCards={cards}
+            customCards={customCards}
+            onDeleteCard={(id) => setCustomCards(customCards.filter((c) => c.id !== id))}
+            onClose={() => setDialog(null)}
+          />
+        )}
+      </>
+    )
+  }
+
   return (
     <main className="app">
       <UpdateBanner />
@@ -183,7 +251,7 @@ export function App() {
           <button type="button" className="pill-btn" onClick={() => setScreen('history')}>
             📅 りれき
           </button>
-          <button type="button" className="icon-btn" aria-label="せってい" onClick={() => setDialog('settings')}>
+          <button type="button" className="icon-btn" aria-label="せってい" onClick={() => openDialog('settings')}>
             ⚙️
           </button>
         </div>
@@ -215,11 +283,11 @@ export function App() {
             defaultStartMin={defaultStartMin}
             onStartMin={(m) => setStartMins((s) => ({ ...s, [selKey]: m }))}
             onChange={setPlan}
-            onCreateCard={() => setDialog('card')}
+            onCreateCard={() => openDialog('card')}
           />
 
           <div className="actions">
-            <button type="button" className="big-btn big-btn--sub" onClick={() => setDialog('presets')}>
+            <button type="button" className="big-btn big-btn--sub" onClick={() => openDialog('presets')}>
               ⭐ いつものよてい
             </button>
             {isToday ? (
@@ -234,54 +302,6 @@ export function App() {
       </div>
 
       <p className="build-info">バージョン {formatBuild(BUILD)}</p>
-
-      {dialog === 'card' && (
-        <CardEditor
-          onClose={() => setDialog(null)}
-          onSave={(c) => {
-            setCustomCards([...customCards, c])
-            setDialog(null)
-          }}
-        />
-      )}
-      {dialog === 'presets' && (
-        <PresetsDialog
-          current={plan}
-          presets={presets}
-          onClose={() => setDialog(null)}
-          onSave={(name) =>
-            setPresets([
-              ...presets,
-              { id: crypto.randomUUID(), name, startMin, items: plan.map(({ uid: _uid, ...rest }) => rest) },
-            ])
-          }
-          onLoad={(p) => {
-            // じこくカードは、いまの設定（時刻・名前）にそろえる
-            setPlan(syncFixed(p.items.map((i) => ({ ...i, uid: crypto.randomUUID() })), fixedCards))
-            setStartMins((s) => ({ ...s, [selKey]: p.startMin ?? null }))
-            setDialog(null)
-          }}
-          onDelete={(id) => setPresets(presets.filter((p) => p.id !== id))}
-        />
-      )}
-      {dialog === 'settings' && (
-        <SettingsDialog
-          settings={settings}
-          onChange={setSettings}
-          history={history}
-          onImportHistory={setHistory}
-          fixedCards={fixedCards}
-          onFixedCards={updateFixedCards}
-          templates={templates}
-          onTemplates={setTemplates}
-          vacations={vacations}
-          onVacations={setVacations}
-          allCards={cards}
-          customCards={customCards}
-          onDeleteCard={(id) => setCustomCards(customCards.filter((c) => c.id !== id))}
-          onClose={() => setDialog(null)}
-        />
-      )}
     </main>
   )
 }

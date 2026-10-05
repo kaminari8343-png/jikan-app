@@ -7,7 +7,7 @@ export function UpdateBanner() {
   return (
     <div className="update-banner" role="status">
       <span>🔄 あたらしい バージョンが あるよ</span>
-      <button type="button" className="pill-btn pill-btn--small" onClick={reloadApp}>
+      <button type="button" className="pill-btn pill-btn--small" onClick={() => void reloadApp()}>
         こうしんする
       </button>
     </div>

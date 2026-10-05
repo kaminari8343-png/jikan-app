@@ -9,11 +9,20 @@ const REPO_NAME = 'jikan-app'
 // 「いま見ている画面が、いつの版か」を たしかめられるようにする（キャッシュで古い版のままか、見わけるため）
 const BUILD = { time: new Date().toISOString(), sha: (process.env.GITHUB_SHA ?? 'dev').slice(0, 7) }
 
+/** ビルドの情報を version.json として公開する。アプリは これを見て「あたらしい版が出ているか」をたしかめる */
+const emitVersionJson = {
+  name: 'emit-version-json',
+  generateBundle(this: { emitFile: (f: { type: 'asset'; fileName: string; source: string }) => void }) {
+    this.emitFile({ type: 'asset', fileName: 'version.json', source: JSON.stringify(BUILD) })
+  },
+}
+
 export default defineConfig({
   base: `/${REPO_NAME}/`,
   define: { __BUILD__: JSON.stringify(BUILD) },
   plugins: [
     react(),
+    emitVersionJson,
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png', 'favicon.svg'],

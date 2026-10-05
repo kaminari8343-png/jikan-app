@@ -1,11 +1,14 @@
 // アプリの「あたらしい バージョン」を取りこむしくみ。
 //
 // ホーム画面のアプリ（PWA）は、画面をキャッシュ（Service Worker）して すぐ開く。
-// あたらしい版を公開しても、開いたままの画面は古いまま。これをふせぐため:
-//  1. アプリを開いたとき・画面にもどったとき・30分ごとに、あたらしい版が ないか しらべる
-//  2. あたらしい版に切りかわったら（controllerchange）、
-//     ・開いて すぐ（15びょう以内）なら、そのまま 自動で よみこみなおす
+// あたらしい版を公開しても、開いたままの画面は古いまま。iOS のホーム画面アプリは
+// Service Worker の更新が とても おそいので、2とおりで たしかめる:
+//  A. Service Worker の更新（registration.update()）→ 切りかわったら controllerchange
+//  B. version.json（ビルドのたびに公開。キャッシュを使わず とりにいく）を見て、いまの版より あたらしければ
+// どちらかで「あたらしい版」と分かったら、
+//     ・開いて すぐ（15びょう以内）なら、キャッシュを すてて 自動で よみこみなおす
 //     ・それ以外は、画面の上に「あたらしい バージョンが あるよ」を出す（そうさ中に とつぜん消さない）
+// しらべるのは、アプリを開いたとき・画面にもどったとき・30分ごと。
 import { useSyncExternalStore } from 'react'
 
 /** 開いてから、これより短ければ 自動で よみこみなおす */
@@ -26,6 +29,20 @@ export interface DocumentLike {
   removeEventListener(type: 'visibilitychange', listener: () => void): void
 }
 
+/** version.json の中身（ビルドの日時とコミット番号） */
+export interface VersionInfo {
+  time: string
+  sha: string
+}
+
+/** latest が current より あたらしいか（日時で くらべる。ローカルの開発ビルド 'dev' は くらべない） */
+export function isNewerVersion(latest: VersionInfo | null | undefined, current: VersionInfo): boolean {
+  if (!latest || current.sha === 'dev' || latest.sha === current.sha) return false
+  const a = Date.parse(latest.time)
+  const b = Date.parse(current.time)
+  return Number.isFinite(a) && Number.isFinite(b) && a > b
+}
+
 export interface UpdateDeps {
   sw: ServiceWorkerContainerLike | undefined
   doc: DocumentLike
@@ -34,44 +51,75 @@ export interface UpdateDeps {
   reload: () => void
   /** あたらしい版が来たことを 画面にしらせる */
   notify: () => void
+  /** いまの版（ビルドの情報） */
+  current?: VersionInfo
+  /** 公開されている いちばん あたらしい版を とってくる（version.json）。とれなければ null */
+  fetchLatest?: () => Promise<VersionInfo | null>
   setIntervalFn?: (fn: () => void, ms: number) => unknown
   clearIntervalFn?: (id: unknown) => void
 }
 
 let registration: RegistrationLike | null = null
+let versionChecker: (() => Promise<void>) | null = null
 
 /** いますぐ しらべる（設定画面の ボタン用）。しらべられなければ false */
 export async function checkNow(): Promise<boolean> {
-  if (!registration) return false
+  if (!registration && !versionChecker) return false
+  let ok = false
   try {
-    await registration.update()
-    return true
+    if (registration) {
+      await registration.update()
+      ok = true
+    }
   } catch {
-    return false
+    // つづけて version.json も しらべる
   }
+  if (versionChecker) {
+    await versionChecker()
+    ok = true
+  }
+  return ok
 }
 
 /** Service Worker の見はりをはじめる。やめるときは、かえってきた関数を呼ぶ */
 export function setupUpdates(d: UpdateDeps): () => void {
   const sw = d.sw
-  if (!sw) return () => {}
   // いちばん最初のインストール（それまで controller がない）は、あたらしい版ではないので 何もしない
-  const hadController = !!sw.controller
+  const hadController = !!sw?.controller
 
-  const onControllerChange = () => {
-    if (!hadController) return
+  // 「あたらしい版」と分かったときの 動き（1回だけ）
+  let found = false
+  const onNewVersion = () => {
+    if (found) return
+    found = true
     if (d.now() < AUTO_RELOAD_WINDOW_MS) d.reload()
     else d.notify()
   }
-  sw.addEventListener('controllerchange', onControllerChange)
 
+  const onControllerChange = () => {
+    if (hadController) onNewVersion()
+  }
+  sw?.addEventListener('controllerchange', onControllerChange)
+
+  const checkVersion = async () => {
+    if (found || !d.fetchLatest || !d.current) return
+    try {
+      if (isNewerVersion(await d.fetchLatest(), d.current)) onNewVersion()
+    } catch {
+      // ネットに つながらないときなどは、あとで また しらべる
+    }
+  }
   const check = () => {
     void registration?.update().catch(() => {})
+    void checkVersion()
   }
-  void sw.ready.then((reg) => {
+  void sw?.ready.then((reg) => {
     registration = reg
-    check()
   })
+  check()
+  // 確認する手段（version.json）が あるときだけ、「いますぐ しらべる」の 対象にする
+  versionChecker = d.fetchLatest && d.current ? checkVersion : null
+
   const onVisible = () => {
     if (d.doc.visibilityState === 'visible') check()
   }
@@ -79,12 +127,15 @@ export function setupUpdates(d: UpdateDeps): () => void {
   const setI = d.setIntervalFn ?? ((fn: () => void, ms: number) => setInterval(fn, ms))
   const clearI = d.clearIntervalFn ?? ((id: unknown) => clearInterval(id as number))
   const timer = setI(check, CHECK_INTERVAL_MS)
+  // ready になったら、Service Worker も しらべる
+  void sw?.ready.then(() => check())
 
   return () => {
-    sw.removeEventListener('controllerchange', onControllerChange)
+    sw?.removeEventListener('controllerchange', onControllerChange)
     d.doc.removeEventListener('visibilitychange', onVisible)
     clearI(timer)
     registration = null
+    versionChecker = null
   }
 }
 
@@ -113,16 +164,48 @@ export function useUpdateReady(): boolean {
   return useSyncExternalStore(subscribe, isUpdateReady)
 }
 
-export const reloadApp = () => window.location.reload()
+/**
+ * 画面を作りなおして よみこむ。Service Worker とキャッシュを すててから よみこむので、古い版が のこらない
+ * （きろく・よてい・せっていは localStorage にあるので きえない）
+ */
+export async function reloadApp(): Promise<void> {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) ?? []
+    await Promise.all(regs.map((r) => r.unregister()))
+  } catch {
+    // つづける
+  }
+  try {
+    const keys = (await globalThis.caches?.keys?.()) ?? []
+    await Promise.all(keys.map((k) => globalThis.caches.delete(k)))
+  } catch {
+    // つづける
+  }
+  window.location.reload()
+}
+
+/** 公開されている version.json（キャッシュを使わずに とってくる）。とれなければ null */
+export async function fetchLatestVersion(base = import.meta.env.BASE_URL): Promise<VersionInfo | null> {
+  try {
+    const res = await fetch(`${base}version.json?t=${Date.now()}`, { cache: 'no-store' })
+    if (!res.ok) return null
+    const j = (await res.json()) as Partial<VersionInfo>
+    return typeof j.time === 'string' && typeof j.sha === 'string' ? { time: j.time, sha: j.sha } : null
+  } catch {
+    return null
+  }
+}
 
 /** アプリのはじめに 呼ぶ */
-export function startUpdates() {
-  if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+export function startUpdates(current: VersionInfo) {
+  if (typeof navigator === 'undefined') return
   setupUpdates({
-    sw: navigator.serviceWorker as unknown as ServiceWorkerContainerLike,
+    sw: 'serviceWorker' in navigator ? (navigator.serviceWorker as unknown as ServiceWorkerContainerLike) : undefined,
     doc: document,
     now: () => performance.now(),
-    reload: reloadApp,
+    reload: () => void reloadApp(),
     notify: markUpdateReady,
+    current,
+    fetchLatest: () => fetchLatestVersion(),
   })
 }
