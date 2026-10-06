@@ -216,6 +216,22 @@ const click = (el: Element | null | undefined) => {
     ;(el as HTMLElement).click()
   })
 }
+/** おとなの せってい: 4けたの ばんごうを いれて ひらく（はじめてなら 2かい いれて きめる） */
+const unlockSettings = async () => {
+  const pad = async (digits: string) => {
+    for (const d of digits) click(Array.from(document.querySelectorAll('.pin__key')).find((b) => b.textContent === d))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 250))
+    })
+  }
+  click(document.querySelector('[aria-label="せってい"]'))
+  if (document.querySelector('[aria-label="ばんごうを きめる"]')) {
+    await pad('1234')
+    await pad('1234')
+  } else {
+    await pad('1234')
+  }
+}
 const byText = (text: string, scope: ParentNode = document) =>
   Array.from(scope.querySelectorAll('button')).find((b) => b.textContent?.includes(text)) as HTMLElement | undefined
 
@@ -318,8 +334,8 @@ describe('実際の画面の入力欄', () => {
     close()
   })
 
-  it('せってい（声・キャラ・ちょうせい・バックアップ）→ じこくカード編集 → どだい・ながいやすみ', () => {
-    click(document.querySelector('[aria-label="せってい"]'))
+  it('せってい（声・キャラ・ちょうせい・バックアップ）→ じこくカード編集 → どだい・ながいやすみ', async () => {
+    await unlockSettings()
     inspect('せってい')
     expect(seen.get('せってい')!.length).toBeGreaterThanOrEqual(2)
 

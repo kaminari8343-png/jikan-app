@@ -153,7 +153,7 @@ describe('バックアップ（書き出し・読み込み）', () => {
 
   it('書き出して読みこむと、同じ内容にもどる', () => {
     const parsed = parseBackup(buildBackup(sessions))
-    expect(parsed).toEqual({ ok: true, sessions, skipped: 0 })
+    expect(parsed).toEqual({ ok: true, sessions, skipped: 0, coinSpends: [] })
   })
   it('JSONでないものは、エラーにする', () => {
     expect(parseBackup('これはJSONじゃない')).toMatchObject({ ok: false })
@@ -169,12 +169,12 @@ describe('バックアップ（書き出し・読み込み）', () => {
       version: 1,
       history: [sessions[0], { id: 'x', startedAt: 'あ', status: 'finished', entries: [] }, { nope: true }],
     })
-    expect(parseBackup(text)).toEqual({ ok: true, sessions: [sessions[0]], skipped: 2 })
+    expect(parseBackup(text)).toEqual({ ok: true, sessions: [sessions[0]], skipped: 2, coinSpends: [] })
   })
   it('評価やかたが ふせいな記録は とばす', () => {
     const bad = JSON.parse(JSON.stringify(sessions[0]))
     bad.entries[0].rating = 'maybe'
-    expect(parseBackup(JSON.stringify({ app: 'jikan-app', history: [bad] }))).toEqual({ ok: true, sessions: [], skipped: 1 })
+    expect(parseBackup(JSON.stringify({ app: 'jikan-app', history: [bad] }))).toEqual({ ok: true, sessions: [], skipped: 1, coinSpends: [] })
   })
   it('じこくカード・じゆうじかん・じかんぎれ・cutoff も、書き出し/読み込みでそのまま戻る', () => {
     const s = session('n', at(2026, 10, 5), 'finished', ['good'])
@@ -184,7 +184,7 @@ describe('バックアップ（書き出し・読み込み）', () => {
       entry(at(2026, 10, 5, 18), null, { kind: 'normal', result: 'timeout' }),
       entry(at(2026, 10, 5, 19), 'bad', { result: 'cutoff' }),
     )
-    expect(parseBackup(buildBackup([s]))).toEqual({ ok: true, sessions: [s], skipped: 0 })
+    expect(parseBackup(buildBackup([s]))).toEqual({ ok: true, sessions: [s], skipped: 0, coinSpends: [] })
   })
   it('古い形式（kind なし・result は done/skipped）の記録も、そのまま読める', () => {
     const old = {
@@ -208,7 +208,7 @@ describe('バックアップ（書き出し・読み込み）', () => {
     bad.entries[0].kind = 'weird'
     const bad2 = JSON.parse(JSON.stringify(sessions[0]))
     bad2.entries[0].result = 'weird'
-    expect(parseBackup(JSON.stringify({ app: 'jikan-app', history: [bad, bad2] }))).toEqual({ ok: true, sessions: [], skipped: 2 })
+    expect(parseBackup(JSON.stringify({ app: 'jikan-app', history: [bad, bad2] }))).toEqual({ ok: true, sessions: [], skipped: 2, coinSpends: [] })
   })
   it('「じっこう中」のまま書き出された記録は、やめた扱いで読みこむ', () => {
     const running = session('r', at(2026, 10, 4), 'running', ['good'])

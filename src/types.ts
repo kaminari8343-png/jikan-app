@@ -32,6 +32,8 @@ export interface PlanItem {
   endOfDay?: boolean
   /** タイムトライアル（はやく おわると コイン）。スタートするときに、せっていから つける */
   trial?: boolean
+  /** あそびカード（コインで のばせる。+5ふんは でない）。スタートするときに、せっていから つける */
+  play?: boolean
 }
 
 /** じこくカード（親が設定画面でつくる、時刻が決まった予定） */
@@ -117,6 +119,23 @@ export interface HistoryEntry {
   coins?: number
   /** じぶんの しんきろく */
   record?: boolean
+  /** コインで のばした回数 */
+  coinExtensions?: number
+}
+
+/** コインを つかった きろく（もらった ぶんは、りれきの きろく自体に のこっている） */
+export interface CoinSpend {
+  id: string
+  /** Date.now の値 */
+  at: number
+  /** つかった まいすう（正の数） */
+  coins: number
+  /** なにに つかったか（いまは あそびカードの えんちょうだけ） */
+  kind: 'extend'
+  /** カードの なまえ */
+  name: string
+  /** のばした 分 */
+  minutes: number
 }
 
 /** 「スタート」を押してから、おわる（またはやめる）までの1回分 */

@@ -1244,6 +1244,9 @@ input {
 .ctrl--done {
   background: #d9f7df;
 }
+.ctrl--coin {
+  background: #fff3c4;
+}
 .ctrl--blocked {
   opacity: 0.45;
 }
@@ -1788,4 +1791,76 @@ input {
 }
 .best-row b {
   flex: 1;
+}
+
+/* あんしょうばんごう */
+.pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.pin__display {
+  font-size: 40px;
+  letter-spacing: 12px;
+  min-height: 56px;
+  padding: 6px 18px;
+  border-radius: 16px;
+  background: #fff;
+}
+.pin__q {
+  font-size: 28px;
+}
+.pin__msg {
+  min-height: 24px;
+  color: #c0392b;
+}
+.pin__pad {
+  display: grid;
+  grid-template-columns: repeat(3, 84px);
+  gap: 10px;
+}
+.pin__key {
+  min-height: 72px;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: var(--shadow);
+  font-size: 30px;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+.pin__key--sub {
+  background: #e8e8e8;
+}
+.pin__key--ok {
+  background: #d9f7df;
+}
+.play-note {
+  font-size: 13px;
+  color: #c0392b;
+}
+.coin-log {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.coin-log li {
+  display: flex;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 17px;
+}
+.coin-log b {
+  min-width: 56px;
+}
+.coin-log .plus {
+  color: #2e7d32;
+}
+.coin-log .minus {
+  color: #c0392b;
 }

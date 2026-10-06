@@ -48,5 +48,8 @@ export const onee: Character = {
     coinGet: 'コインを {count} もらったよ',
     newRecord: 'しんきろく！すごいね！',
     tryFaster: 'つぎは はやく ちゃんと できるかな？',
+    coinExtended: '{min} のびたよ！',
+    coinShort: 'あと{count} たりないよ',
+    extendLimit: 'きょうは もう のばせないよ',
   },
 }

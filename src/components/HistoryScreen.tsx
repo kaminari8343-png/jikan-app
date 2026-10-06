@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import type { HistoryEntry, HistorySession } from '../types'
+import type { CoinSpend, HistoryEntry, HistorySession } from '../types'
+import { coinEventsOn } from '../coins'
 import { dateKey, dateKeyOf, dayEntries, dayMark, groupByDay, monthGrid, weekdayOf, WEEKDAYS, type DayMark } from '../history'
 import { formatMinutes, formatMmSs } from '../time'
 import { bestTimes } from '../trial'
@@ -12,7 +13,19 @@ function hm(ms: number) {
   return `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export function HistoryScreen({ sessions, now, coins, onBack }: { sessions: HistorySession[]; now: Date; coins: number; onBack: () => void }) {
+export function HistoryScreen({
+  sessions,
+  spends,
+  now,
+  coins,
+  onBack,
+}: {
+  sessions: HistorySession[]
+  spends: CoinSpend[]
+  now: Date
+  coins: number
+  onBack: () => void
+}) {
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [selected, setSelected] = useState(dateKey(now.getTime()))
@@ -29,6 +42,7 @@ export function HistoryScreen({ sessions, now, coins, onBack }: { sessions: Hist
   const [sy, sm, sd] = selected.split('-').map(Number)
   const selSessions = days.get(selected) ?? []
   const list = dayEntries(selSessions)
+  const coinLog = useMemo(() => coinEventsOn(sessions, spends, selected), [sessions, spends, selected])
   const bests = useMemo(() => [...bestTimes(sessions).values()].sort((a, b) => a.name.localeCompare(b.name, 'ja')), [sessions])
 
   return (
@@ -112,6 +126,26 @@ export function HistoryScreen({ sessions, now, coins, onBack }: { sessions: Hist
           <p className="day__note">とちゅうで やめたよ</p>
         )}
       </section>
+      <section className="day" aria-label="コインの きろく">
+        <h2 className="day__title">🪙 コインの きろく（{sm}がつ{sd}にち）</h2>
+        {coinLog.length === 0 ? (
+          <p className="day__empty">この ひの コインは ないよ</p>
+        ) : (
+          <ul className="coin-log">
+            {coinLog.map((c, i) => (
+              <li key={i}>
+                <span>{hm(c.at)}</span>
+                <b className={c.delta > 0 ? 'plus' : 'minus'}>
+                  {c.delta > 0 ? '+' : '−'}
+                  {Math.abs(c.delta)}
+                </b>
+                <span>{c.delta > 0 ? 'もらった ' : 'つかった '}{c.label}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
       <section className="day" aria-label="じぶんの ベスト">
         <h2 className="day__title">🏆 じぶんの ベスト</h2>
         {bests.length === 0 ? (
@@ -167,6 +201,7 @@ function EntryRow({ entry }: { entry: HistoryEntry }) {
         {entry.trial && entry.savedMs != null && entry.savedMs >= 60_000 && <span className="chip chip--done">⏱ {Math.floor(entry.savedMs / 60_000)}ふん はやかった</span>}
         {entry.coins ? <span className="chip chip--done">🪙 +{entry.coins}</span> : null}
         {entry.record && <span className="chip chip--done">🏆 しんきろく</span>}
+        {entry.coinExtensions ? <span className="chip">🪙 +のばした × {entry.coinExtensions}</span> : null}
         {entry.extensions > 0 && <span className="chip">+5ふん × {entry.extensions}</span>}
       </div>
     </div>

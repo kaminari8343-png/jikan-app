@@ -19,13 +19,15 @@ import { useNow } from './hooks'
 import { setSpeechSettings, unlockSpeech } from './speech'
 import { normalizeSettings } from './voiceSettings'
 import { useStored } from './storage'
-import { bestTimes, coinsEarned, stampTrial } from './trial'
+import { bestTimes, stampTrial } from './trial'
+import { clampPlay, coinBalance as balanceOf, extendsToday, isPlayCard, stampPlay } from './coins'
+import { PinGate } from './components/PinGate'
 import { unlockAudio } from './fanfare'
 import { addDaysMs, formatClock, startOfDay } from './time'
 import { abortRun, normalizeRun, startRun } from './runner'
 import { dateKey, upsertSession } from './history'
 import { HistoryScreen } from './components/HistoryScreen'
-import type { CardDef, DayType, FixedCard, HistorySession, PlanItem, RunState, SavedPlan, Settings, Templates, Vacation } from './types'
+import type { CardDef, CoinSpend, DayType, FixedCard, HistorySession, PlanItem, RunState, SavedPlan, Settings, Templates, Vacation } from './types'
 import { load, save } from './storage'
 
 type Dialog = null | 'card' | 'presets' | 'settings' | 'rename'
@@ -75,6 +77,8 @@ export function App() {
   // じっこう中の状態は、リロードしても続けられるよう保存する
   const [run, setRun] = useState<RunState | null>(() => normalizeRun(load<unknown>('run', null)))
   const [history, setHistory] = useStored<HistorySession[]>('history', [])
+  // コインを つかった きろく（もらった ぶんは、りれきの きろくから 数える）
+  const [spends, setSpends] = useStored<CoinSpend[]>('coinSpends', [])
   const [screen, setScreen] = useState<Screen>('plan')
   const updateRun = (r: RunState | null) => {
     setRun(r)
@@ -171,7 +175,7 @@ export function App() {
 
   const cards = [...PRESET_CARDS, ...MORNING_CARDS, ...customCards]
   // コインと、じぶんベスト（いま じっこう中の回は ベストに ふくめない。その回の まえのカードは runner が くらべる）
-  const coinBalance = coinsEarned(history)
+  const coinBalance = balanceOf(history, spends)
   const bests = useMemo(() => bestTimes(history, run?.session.id), [history, run?.session.id])
 
   const start = () => {
@@ -179,18 +183,24 @@ export function App() {
     unlockSpeech()
     unlockAudio()
     // スタート時刻をかえていても、じっこうは「いま」からはじまる（じこくカードの時刻は、そのまま）
-    const step = startRun(stampTrial(plans[todayKey] ?? NO_ITEMS, settings.trialOverrides), Date.now())
+    const items = stampPlay(clampPlay(stampTrial(plans[todayKey] ?? NO_ITEMS, settings.trialOverrides), settings.playOverrides, settings.playMax), settings.playOverrides)
+    const step = startRun(items, Date.now())
     speakCues(step.cues)
     updateRun(step.run)
   }
 
-  if (run) return <Runner run={run} onChange={updateRun} onExit={exitRun} bests={bests} coins={coinBalance} />
+  if (run) return <Runner run={run} onChange={updateRun} onExit={exitRun} bests={bests}
+        coins={coinBalance}
+        rules={settings.coinExtend}
+        usedToday={extendsToday(spends, nowMs)}
+        onSpend={(s) => setSpends((l) => [...l, s])}
+      />
 
   if (screen === 'history') {
     return (
       <>
         <UpdateBanner />
-        <HistoryScreen sessions={history} now={now} coins={coinBalance} onBack={() => setScreen('plan')} />
+        <HistoryScreen sessions={history} spends={spends} now={now} coins={coinBalance} onBack={() => setScreen('plan')} />
       </>
     )
   }
@@ -241,7 +251,10 @@ export function App() {
           />
         )}
         {dialog === 'settings' && (
+          <PinGate onClose={() => setDialog(null)}>
           <SettingsDialog
+            spends={spends}
+            onImportSpends={setSpends}
             settings={settings}
             onChange={setSettings}
             history={history}
@@ -257,6 +270,7 @@ export function App() {
             onDeleteCard={(id) => setCustomCards(customCards.filter((c) => c.id !== id))}
             onClose={() => setDialog(null)}
           />
+          </PinGate>
         )}
       </>
     )
@@ -306,6 +320,7 @@ export function App() {
             defaultStartMin={defaultStartMin}
             onStartMin={(m) => setStartMins((s) => ({ ...s, [selKey]: m }))}
             onChange={setPlan}
+            play={{ isPlay: (id) => isPlayCard(id, settings.playOverrides), max: settings.playMax }}
             onCreateCard={() => openDialog('card')}
             onRename={(uid) => {
               setRenameUid(uid)

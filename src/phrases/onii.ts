@@ -34,5 +34,8 @@ export const onii: Character = {
     coinGet: 'コイン {count} ゲットだぞ！',
     newRecord: 'しんきろくだ！やったな！',
     tryFaster: 'つぎは はやく ちゃんと できるかな？',
+    coinExtended: '{min} のびたぞ！',
+    coinShort: 'あと{count} たりないぞ',
+    extendLimit: 'きょうは もう のばせないぞ',
   },
 }

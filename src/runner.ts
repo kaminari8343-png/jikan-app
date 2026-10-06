@@ -313,10 +313,10 @@ export function resume(r: RunState, now: number): RunState {
   return r.phase !== 'timer' || r.runningSince != null ? r : { ...r, runningSince: now }
 }
 
-/** 「+5ふん」できるか。つぎのじこくカードの時刻をこえるならダメ */
-export function canExtend(r: RunState, now: number): { ok: true } | { ok: false; fixed: PlanItem } {
+/** 「+5ふん」（や コインでの えんちょう）できるか。つぎのじこくカードの時刻をこえるならダメ */
+export function canExtend(r: RunState, now: number, byMs: number = EXTEND_MS): { ok: true } | { ok: false; fixed: PlanItem } {
   const up = upcomingFixed(r)
-  if (up && now + remainingMs(r, now) + EXTEND_MS > up.startMs) return { ok: false, fixed: up.item }
+  if (up && now + remainingMs(r, now) + byMs > up.startMs) return { ok: false, fixed: up.item }
   return { ok: true }
 }
 
@@ -325,12 +325,43 @@ export function extendCard(r: RunState, now: number): Step {
   if (r.phase !== 'timer') return { run: r, cues: [] }
   const can = canExtend(r, now)
   if (!can.ok) return { run: r, cues: [{ key: 'cannotExtend', vars: { fixed: can.fixed.name } }] }
-  const count = (r.session.entries[r.cur]?.extensions ?? 0) + 1
-  const next = patchEntry({ ...r, extraMs: r.extraMs + EXTEND_MS }, { extensions: count })
+  const next = patchEntry({ ...r, extraMs: r.extraMs + EXTEND_MS }, { extensions: (r.session.entries[r.cur]?.extensions ?? 0) + 1 })
+  return { run: rearm(next, now), cues: [{ key: 'extended', vars: { minutes: EXTEND_MS / MIN } }] }
+}
+
+/** のびた分の「あと5ふん／1ぷん」を、もういちど話せるようにする */
+function rearm(next: RunState, now: number): RunState {
   const el = elapsedMs(next, now)
   const future = new Set(scheduleEvents(durationMs(next)).filter((e) => e.atMs > el).map((e) => e.key as string))
-  const run = { ...next, fired: next.fired.filter((k) => k === 'half' || !future.has(k)) }
-  return { run, cues: [{ key: 'extended', vars: { minutes: EXTEND_MS / MIN } }] }
+  return { ...next, fired: next.fired.filter((k) => k === 'half' || !future.has(k)) }
+}
+
+/** コインで のばす きまり（親が せっていで かえられる） */
+export interface CoinRules {
+  cost: number
+  minutes: number
+  perDay: number
+}
+
+export interface CoinExtendStep extends Step {
+  /** つかった コインの まいすう（のばせなかったときは 0） */
+  spent: number
+}
+
+/**
+ * あそびカードを コインで のばす。
+ * のばせない とき（ことばで りゆうを つたえる）: 1日の回数 → つぎのじこくカードを こえる → コインが たりない
+ * balance は いま もっている コイン、usedToday は きょう のばした回数。
+ */
+export function extendWithCoins(r: RunState, now: number, rules: CoinRules, balance: number, usedToday: number): CoinExtendStep {
+  const item = currentItem(r)
+  if (r.phase !== 'timer' || !item?.play) return { run: r, cues: [], spent: 0 }
+  if (usedToday >= rules.perDay) return { run: r, cues: [{ key: 'extendLimit' }], spent: 0 }
+  const can = canExtend(r, now, rules.minutes * MIN)
+  if (!can.ok) return { run: r, cues: [{ key: 'cannotExtend', vars: { fixed: can.fixed.name } }], spent: 0 }
+  if (balance < rules.cost) return { run: r, cues: [{ key: 'coinShort', vars: { count: rules.cost - balance } }], spent: 0 }
+  const next = patchEntry({ ...r, extraMs: r.extraMs + rules.minutes * MIN }, { coinExtensions: (r.session.entries[r.cur]?.coinExtensions ?? 0) + 1 })
+  return { run: rearm(next, now), cues: [{ key: 'coinExtended', vars: { minutes: rules.minutes } }], spent: rules.cost }
 }
 
 /** 時間がきた（done）／スキップした（skipped）／じこくカードで止めた（cutoff）。⭕️❌をえらぶ画面へ */

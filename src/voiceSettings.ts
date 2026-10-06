@@ -14,15 +14,25 @@ export interface Settings {
   tuning: Partial<Record<CharacterId, Tuning>>
   /** タイムトライアルの オン・オフ（カードの id ごと）。ないカードは はじめの設定 */
   trialOverrides: Record<string, boolean>
+  /** あそびカードの 指定（カードの id ごと）。ないカードは はじめの設定 */
+  playOverrides: Record<string, boolean>
+  /** あそびカードの 1まいの さいだい時間（分） */
+  playMax: number
+  /** コインで のばす: つかう まいすう・のばす分・1日の回数 */
+  coinExtend: { cost: number; minutes: number; perDay: number }
 }
 
-export const DEFAULT_SETTINGS: Settings = { voiceOn: true, volume: 1, character: 'onee', tuning: {}, trialOverrides: {} }
+export const DEFAULT_SETTINGS: Settings = { voiceOn: true, volume: 1, character: 'onee', tuning: {}, trialOverrides: {}, playOverrides: {}, playMax: 30, coinExtend: { cost: 30, minutes: 10, perDay: 2 } }
 
 /** 前のバージョンの設定（はやさ・たかさ が ぜんたいで ひとつ）の、はじめの値 */
 const OLD_RATE = 0.9
 const OLD_PITCH = 1.2
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+function clampInt(v: unknown, min: number, max: number, fallback: number): number {
+  return isNum(v) ? Math.min(max, Math.max(min, Math.round(v))) : fallback
+}
 
 function cleanBoolMap(v: unknown): Record<string, boolean> {
   const out: Record<string, boolean> = {}
@@ -36,6 +46,7 @@ export function normalizeSettings(raw: unknown): Settings {
   const character: CharacterChoice =
     r.character === 'random' || (CHARACTER_IDS as readonly string[]).includes(r.character as string) ? (r.character as CharacterChoice) : 'onee'
 
+  const ce = (r.coinExtend && typeof r.coinExtend === 'object' ? r.coinExtend : {}) as Record<string, unknown>
   const tuning: Settings['tuning'] = {}
   if (r.tuning && typeof r.tuning === 'object') {
     for (const id of CHARACTER_IDS) {
@@ -62,6 +73,13 @@ export function normalizeSettings(raw: unknown): Settings {
     character,
     tuning,
     trialOverrides: cleanBoolMap(r.trialOverrides),
+    playOverrides: cleanBoolMap(r.playOverrides),
+    playMax: clampInt(r.playMax, 5, 120, 30),
+    coinExtend: {
+      cost: clampInt(ce.cost, 1, 500, 30),
+      minutes: clampInt(ce.minutes, 1, 60, 10),
+      perDay: clampInt(ce.perDay, 1, 20, 2),
+    },
   }
 }
 

@@ -27,6 +27,9 @@ export const PHRASE_KEYS = [
   'coinGet', // ⭕️で コインを もらったとき（{count}まい）
   'newRecord', // じぶんの きろくを こえたとき
   'tryFaster', // タイムトライアルで ❌のとき
+  'coinExtended', // コインで のばしたとき（{min} のびたよ！）
+  'coinShort', // コインが たりないとき（あと{count}）
+  'extendLimit', // コインで のばせる 1日の回数を つかいきったとき
 ] as const
 
 export type PhraseKey = (typeof PHRASE_KEYS)[number]
