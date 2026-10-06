@@ -498,7 +498,10 @@ input {
   background: #fff;
   color: var(--ink);
   min-width: 0;
-  flex: 1;
+  /* たてならびの中で つぶれない（flex: 1 だと 高さが 31px に なってしまう） */
+  flex: 0 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 .field small {
   color: var(--ink-soft);
@@ -1863,4 +1866,54 @@ input {
 }
 .coin-log .minus {
   color: #c0392b;
+}
+
+/* アプリの中の ひらがな入力 */
+.kana {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.kana__grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.kana__key {
+  min-height: 56px;
+  border-radius: 14px;
+  background: #fff;
+  border: 3px solid #e8d3ae;
+  box-shadow: var(--shadow);
+  font-size: 26px;
+  font-weight: 700;
+  touch-action: manipulation;
+}
+.kana__key:active {
+  transform: translateY(2px);
+  box-shadow: none;
+}
+.kana__tools {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+}
+.kana__key--tool {
+  background: #fff3c4;
+  font-size: 22px;
+  line-height: 1.1;
+}
+.kana__key--wide {
+  grid-column: 1 / -1;
+  font-size: 20px;
+}
+.kana__key--wide[aria-pressed='true'] {
+  background: #d9f7df;
+}
+/* 縦ならびの中で 入力欄が つぶれない ように */
+.kana-field,
+.field,
+.field input {
+  flex-shrink: 0;
 }

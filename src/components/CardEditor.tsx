@@ -4,6 +4,7 @@ import { CARD_COLORS, CARD_EMOJIS, MAX_MINUTES, MIN_MINUTES } from '../cards'
 import { formatMinutes } from '../time'
 import { Modal } from './Modal'
 import { StepButton } from './StepButton'
+import { KanaField } from './KanaField'
 
 /** 「＋じぶんでつくる」: 名前・絵文字・色・はじめの時間をきめる */
 export function CardEditor({ onSave, onClose }: { onSave: (c: CardDef) => void; onClose: () => void }) {
@@ -24,15 +25,7 @@ export function CardEditor({ onSave, onClose }: { onSave: (c: CardDef) => void; 
         </div>
       </div>
 
-      <label className="field">
-        <span>なまえ</span>
-        <input
-          value={name}
-          maxLength={10}
-          placeholder="れい: ピアノ"
-          onChange={(e) => setName(e.target.value)}
-        />
-      </label>
+      <KanaField label="なまえ" value={name} maxLength={10} placeholder="れい: ピアノ" onChange={setName} />
 
       <div className="field">
         <span>え</span>
