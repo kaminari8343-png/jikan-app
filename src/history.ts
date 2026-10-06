@@ -115,6 +115,11 @@ function parseEntry(v: unknown): HistoryEntry | null {
     result: e.result as HistoryEntry['result'],
     extensions: isNum(e.extensions) ? Math.max(0, Math.floor(e.extensions)) : 0,
     rating: e.rating as HistoryEntry['rating'],
+    ...(e.trial === true ? { trial: true } : {}),
+    ...(isNum(e.activeMs) ? { activeMs: e.activeMs } : {}),
+    ...(isNum(e.savedMs) ? { savedMs: e.savedMs } : {}),
+    ...(isNum(e.coins) ? { coins: Math.max(0, Math.floor(e.coins)) } : {}),
+    ...(e.record === true ? { record: true } : {}),
   }
 }
 

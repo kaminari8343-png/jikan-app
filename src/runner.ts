@@ -6,6 +6,7 @@ import type { PhraseVars } from './phrases.logic'
 import { closeSession } from './history'
 import { fixedEndOf, fixedStartOf, isEndOfDay, isFixed, isMoment } from './schedule'
 import { startOfDay } from './time'
+import { coinsForSaved, isRecordEntry, recordKey } from './trial'
 
 const MIN = 60_000
 export const EXTEND_MS = 5 * MIN
@@ -77,6 +78,7 @@ function normalEntry(item: PlanItem, now: number): HistoryEntry {
     result: null,
     extensions: 0,
     rating: null,
+    ...(item.trial ? { trial: true } : {}),
   }
 }
 
@@ -336,7 +338,15 @@ export function finishCard(r: RunState, how: 'done' | 'skipped' | 'cutoff', now:
   // 時間切れは、タブが止まっていて気づくのが遅れても、ほんとうの終了時刻で記録する
   const scheduledEnd = r.runningSince != null ? r.runningSince + (durationMs(r) - r.accumMs) : now
   const endedAt = how === 'done' ? Math.min(now, scheduledEnd) : now
-  const done = patchEntry(r, { result: how, endedAt })
+  const patch: Partial<HistoryEntry> = { result: how, endedAt }
+  // タイムトライアル: さいごまで やったときは、じっさいに うごいた時間と、うかせた時間を きろくする
+  if (how === 'done' && r.session.entries[r.cur]?.trial) {
+    const planned = durationMs(r)
+    const active = Math.min(planned, Math.max(1, elapsedMs(r, now)))
+    patch.activeMs = active
+    patch.savedMs = Math.max(0, planned - active)
+  }
+  const done = patchEntry(r, patch)
   return { ...done, phase: 'rate', accumMs: 0, runningSince: null, fired: keepFired(r.fired) }
 }
 
@@ -346,12 +356,50 @@ export function skipCard(r: RunState, now: number): Step {
   return { run: finishCard(r, 'skipped', now), cues: [{ key: 'ask', vars: { name: item.name } }] }
 }
 
-/** ⭕️／❌をえらんだ。つぎへ進める（じこくカードの時刻をすぎていれば、のこりは じかんぎれ） */
-export function rateCard(r: RunState, rating: Rating, now: number): Step {
+/** 「おわった！」: 時間より はやく おわる。タイムトライアルで 1ぷん以上 はやければ、はやかったと ほめる */
+export function finishEarly(r: RunState, now: number): Step {
+  if (r.phase !== 'timer') return { run: r, cues: [] }
+  const item = currentItem(r)!
+  const run = finishCard(r, 'done', now)
+  const saved = run.session.entries[run.cur]?.savedMs ?? 0
+  const lead: Cue = saved >= MIN ? { key: 'early', vars: { minutes: Math.floor(saved / MIN) } } : { key: 'end', vars: { name: item.name } }
+  return { run, cues: [lead, { key: 'ask', vars: { name: item.name } }] }
+}
+
+/**
+ * ⭕️／❌をえらんだ。つぎへ進める（じこくカードの時刻をすぎていれば、のこりは じかんぎれ）
+ * タイムトライアルのカードは、⭕️のときだけ コイン（うかせた1分に つき1まい）と、じぶんの しんきろく。
+ * bests は、これまでの かいの ベスト（recordKey(なまえ) → ミリ秒）。この回の まえのカードも あわせて くらべる。
+ */
+export function rateCard(r: RunState, rating: Rating, now: number, bests: ReadonlyMap<string, { ms: number }> = new Map()): Step {
   if (r.phase !== 'rate') return { run: r, cues: [] }
-  const rated = patchEntry(r, { rating })
-  const next = enterFrom(rated, r.index + 1, now)
-  return { run: next.run, cues: [{ key: rating === 'good' ? 'rateGood' : 'rateBad' }, ...next.cues] }
+  const e = r.session.entries[r.cur]
+  const eligible = !!e && !!e.trial && e.result === 'done' && typeof e.activeMs === 'number'
+  const patch: Partial<HistoryEntry> = { rating }
+  const cues: Cue[] = []
+  if (rating === 'good') {
+    cues.push({ key: 'rateGood' })
+    if (eligible) {
+      const coins = coinsForSaved(e.savedMs ?? 0)
+      const key = recordKey(e.name)
+      let prev = bests.get(key)?.ms
+      for (const o of r.session.entries.slice(0, r.cur)) {
+        if (isRecordEntry(o) && recordKey(o.name) === key) prev = prev === undefined ? o.activeMs! : Math.min(prev, o.activeMs!)
+      }
+      if (coins > 0) {
+        patch.coins = coins
+        cues.push({ key: 'coinGet', vars: { count: coins } })
+      }
+      if (prev === undefined || e.activeMs! < prev) {
+        patch.record = true
+        cues.push({ key: 'newRecord' })
+      }
+    }
+  } else {
+    cues.push({ key: eligible && (e.savedMs ?? 0) >= MIN ? 'tryFaster' : 'rateBad' })
+  }
+  const next = enterFrom(patchEntry(r, patch), r.index + 1, now)
+  return { run: next.run, cues: [...cues, ...next.cues] }
 }
 
 /** やめて もどる（さいごまで終わっていなければ「とちゅうでやめた」） */

@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import type { HistoryEntry, HistorySession } from '../types'
 import { dateKey, dateKeyOf, dayEntries, dayMark, groupByDay, monthGrid, weekdayOf, WEEKDAYS, type DayMark } from '../history'
-import { formatMinutes } from '../time'
+import { formatMinutes, formatMmSs } from '../time'
+import { bestTimes } from '../trial'
 
 const MARK_ICON: Record<Exclude<DayMark, null>, string> = { hanamaru: '💮', maru: '⭕' }
 
@@ -11,7 +12,7 @@ function hm(ms: number) {
   return `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export function HistoryScreen({ sessions, now, onBack }: { sessions: HistorySession[]; now: Date; onBack: () => void }) {
+export function HistoryScreen({ sessions, now, coins, onBack }: { sessions: HistorySession[]; now: Date; coins: number; onBack: () => void }) {
   const [year, setYear] = useState(now.getFullYear())
   const [month, setMonth] = useState(now.getMonth())
   const [selected, setSelected] = useState(dateKey(now.getTime()))
@@ -28,11 +29,15 @@ export function HistoryScreen({ sessions, now, onBack }: { sessions: HistorySess
   const [sy, sm, sd] = selected.split('-').map(Number)
   const selSessions = days.get(selected) ?? []
   const list = dayEntries(selSessions)
+  const bests = useMemo(() => [...bestTimes(sessions).values()].sort((a, b) => a.name.localeCompare(b.name, 'ja')), [sessions])
 
   return (
     <main className="app history">
       <header className="top">
         <h1>りれき</h1>
+        <span className="coin-chip" aria-label={`コイン ${coins}まい`}>
+          🪙 {coins}
+        </span>
         <button type="button" className="pill-btn" onClick={onBack}>
           🏠 もどる
         </button>
@@ -107,6 +112,23 @@ export function HistoryScreen({ sessions, now, onBack }: { sessions: HistorySess
           <p className="day__note">とちゅうで やめたよ</p>
         )}
       </section>
+      <section className="day" aria-label="じぶんの ベスト">
+        <h2 className="day__title">🏆 じぶんの ベスト</h2>
+        {bests.length === 0 ? (
+          <p className="day__empty">タイムトライアルで ⭕を つけると、ここに ベストが のこるよ</p>
+        ) : (
+          <ul className="best-list">
+            {bests.map((b) => (
+              <li key={b.name} className="best-row">
+                <span>{b.emoji}</span>
+                <b>{b.name}</b>
+                <span>{formatMmSs(b.ms)}</span>
+                <small>{b.count}かい</small>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   )
 }
@@ -142,6 +164,9 @@ function EntryRow({ entry }: { entry: HistoryEntry }) {
         {kind === 'normal' && entry.result === 'done' && <span className="chip chip--done">さいごまで やった</span>}
         {kind === 'normal' && entry.result === 'cutoff' && <span className="chip chip--skip">じこくカードで ちゅうだん</span>}
         {kind === 'normal' && entry.result === null && <span className="chip chip--skip">とちゅうで やめた</span>}
+        {entry.trial && entry.savedMs != null && entry.savedMs >= 60_000 && <span className="chip chip--done">⏱ {Math.floor(entry.savedMs / 60_000)}ふん はやかった</span>}
+        {entry.coins ? <span className="chip chip--done">🪙 +{entry.coins}</span> : null}
+        {entry.record && <span className="chip chip--done">🏆 しんきろく</span>}
         {entry.extensions > 0 && <span className="chip">+5ふん × {entry.extensions}</span>}
       </div>
     </div>

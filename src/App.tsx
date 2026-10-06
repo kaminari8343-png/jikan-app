@@ -19,6 +19,8 @@ import { useNow } from './hooks'
 import { setSpeechSettings, unlockSpeech } from './speech'
 import { normalizeSettings } from './voiceSettings'
 import { useStored } from './storage'
+import { bestTimes, coinsEarned, stampTrial } from './trial'
+import { unlockAudio } from './fanfare'
 import { addDaysMs, formatClock, startOfDay } from './time'
 import { abortRun, normalizeRun, startRun } from './runner'
 import { dateKey, upsertSession } from './history'
@@ -168,23 +170,27 @@ export function App() {
   }
 
   const cards = [...PRESET_CARDS, ...MORNING_CARDS, ...customCards]
+  // コインと、じぶんベスト（いま じっこう中の回は ベストに ふくめない。その回の まえのカードは runner が くらべる）
+  const coinBalance = coinsEarned(history)
+  const bests = useMemo(() => bestTimes(history, run?.session.id), [history, run?.session.id])
 
   const start = () => {
     // iOS は、タップのなかで一度しゃべらせないと音が出ない
     unlockSpeech()
+    unlockAudio()
     // スタート時刻をかえていても、じっこうは「いま」からはじまる（じこくカードの時刻は、そのまま）
-    const step = startRun(plans[todayKey] ?? NO_ITEMS, Date.now())
+    const step = startRun(stampTrial(plans[todayKey] ?? NO_ITEMS, settings.trialOverrides), Date.now())
     speakCues(step.cues)
     updateRun(step.run)
   }
 
-  if (run) return <Runner run={run} onChange={updateRun} onExit={exitRun} />
+  if (run) return <Runner run={run} onChange={updateRun} onExit={exitRun} bests={bests} coins={coinBalance} />
 
   if (screen === 'history') {
     return (
       <>
         <UpdateBanner />
-        <HistoryScreen sessions={history} now={now} onBack={() => setScreen('plan')} />
+        <HistoryScreen sessions={history} now={now} coins={coinBalance} onBack={() => setScreen('plan')} />
       </>
     )
   }
@@ -262,6 +268,9 @@ export function App() {
       <header className="top">
         <h1>{isToday ? 'きょうのよてい' : 'あしたのよてい'}</h1>
         <div className="top__buttons">
+          <span className="coin-chip" aria-label={`コイン ${coinBalance}まい`}>
+            🪙 {coinBalance}
+          </span>
           <button type="button" className="pill-btn" onClick={() => setScreen('history')}>
             📅 りれき
           </button>

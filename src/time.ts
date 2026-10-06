@@ -15,6 +15,11 @@ export function numberToKana(n: number): string {
   return s
 }
 
+/** 「さんまい」のような、まいすうの読み */
+export function countToKana(n: number): string {
+  return `${numberToKana(n)}まい`
+}
+
 const HOUR_COUNT = ['', 'いち', 'に', 'さん', 'よ', 'ご', 'ろく', 'なな', 'はち', 'く', 'じゅう']
 
 /** 「じかん」つきの時間の読み。例: 1→いちじかん, 4→よじかん, 12→じゅうにじかん */

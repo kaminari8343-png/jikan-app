@@ -92,3 +92,8 @@ export function speakTest(text: string, ch: Character = activeCharacter()) {
 export function stopSpeaking() {
   if (supported) speechSynthesis.cancel()
 }
+
+/** 効果音（ファンファーレ）を 鳴らしていいか と 音量。声の設定と おなじ */
+export function soundSettings(): { on: boolean; volume: number } {
+  return { on: settings.voiceOn, volume: settings.volume }
+}

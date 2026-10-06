@@ -23,6 +23,10 @@ export const PHRASE_KEYS = [
   'cannotExtend', // 「+5ふん」が、つぎのじこくカードをこえるとき
   'endOfDay', // 1日のおわり（ねる）
   'extended', // 「+5ふん」をおしたとき
+  'early', // タイムトライアル: 予定より はやく おわったとき（{min} はやかった！）
+  'coinGet', // ⭕️で コインを もらったとき（{count}まい）
+  'newRecord', // じぶんの きろくを こえたとき
+  'tryFaster', // タイムトライアルで ❌のとき
 ] as const
 
 export type PhraseKey = (typeof PHRASE_KEYS)[number]

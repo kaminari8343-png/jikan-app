@@ -30,5 +30,9 @@ export const ninja: Character = {
     cannotExtend: '{fixed}の じかんが あるから、のばせないでござる',
     endOfDay: 'きょうも おつかれでござる。おやすみでござる。ニンニン',
     extended: '{min}、のばしたでござる。ニンニン',
+    early: '{min} はやかったでござる！ニンニン',
+    coinGet: 'コイン {count} てにいれたでござる！',
+    newRecord: 'しんきろくでござる！おみごと！',
+    tryFaster: 'つぎは はやく ちゃんと できるかな？でござる',
   },
 }

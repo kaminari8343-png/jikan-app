@@ -30,6 +30,8 @@ export interface PlanItem {
   leaving?: boolean
   /** 1日のおわり（ねる）。省略のとき、長さ0のじこくカードは1日のおわりとして扱う（古いデータ用） */
   endOfDay?: boolean
+  /** タイムトライアル（はやく おわると コイン）。スタートするときに、せっていから つける */
+  trial?: boolean
 }
 
 /** じこくカード（親が設定画面でつくる、時刻が決まった予定） */
@@ -105,6 +107,16 @@ export interface HistoryEntry {
   extensions: number
   /** じぶんでつけた⭕️／❌。まだなら null */
   rating: Rating | null
+  /** タイムトライアルのカードだった */
+  trial?: boolean
+  /** じっさいに うごいていた時間（ms）。いちじていしは ひく。さいごまで やったカードだけ */
+  activeMs?: number
+  /** よていより はやく おわった時間（ms） */
+  savedMs?: number
+  /** ⭕️で もらったコイン */
+  coins?: number
+  /** じぶんの しんきろく */
+  record?: boolean
 }
 
 /** 「スタート」を押してから、おわる（またはやめる）までの1回分 */

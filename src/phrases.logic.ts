@@ -1,6 +1,6 @@
 import { DEFAULT_CHARACTER_ID, getCharacter, type Character, type PhraseKey } from './phrases'
 import { readingOf } from './readings'
-import { clockToKana, minutesToKana } from './time'
+import { clockToKana, countToKana, minutesToKana } from './time'
 
 export interface PhraseVars {
   name?: string
@@ -10,6 +10,8 @@ export interface PhraseVars {
   fixed?: string
   /** 時刻（0:00からの分）。{time} になる */
   clock?: number
+  /** コインの まいすう。{count} になる */
+  count?: number
 }
 
 /** ひらがな → カタカナ（ロボット用） */
@@ -27,6 +29,7 @@ export function say(key: PhraseKey, vars: PhraseVars = {}, character: Character 
     .replaceAll('{next}', vars.next ? readingOf(vars.next) : '')
     .replaceAll('{fixed}', vars.fixed ? readingOf(vars.fixed) : '')
     .replaceAll('{time}', vars.clock != null ? clockToKana(vars.clock) : '')
+    .replaceAll('{count}', vars.count != null ? countToKana(vars.count) : '')
     .replaceAll('{min}', vars.minutes != null ? minutesToKana(vars.minutes) : '')
   return character.kana === 'katakana' ? toKatakana(text) : text
 }
