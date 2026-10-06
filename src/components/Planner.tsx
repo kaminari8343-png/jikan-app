@@ -30,7 +30,7 @@ import {
   type Timeline,
 } from '../schedule'
 import { StepButton } from './StepButton'
-import { HandleTouchSensor, SafeMouseSensor, SafeTouchSensor } from '../dndSensors'
+import { SafeMouseSensor, SafeTouchSensor } from '../dndSensors'
 
 const PALETTE_ZONE = 'palette-zone'
 const LIST_ZONE = 'list-zone'
@@ -81,6 +81,8 @@ interface Props {
   onStartMin: (m: number | null) => void
   onChange: (items: PlanItem[]) => void
   onCreateCard: () => void
+  /** 列のカードをタップ: そのカードだけの なまえを つける */
+  onRename: (uid: string) => void
 }
 
 export function Planner({
@@ -98,6 +100,7 @@ export function Planner({
   onStartMin,
   onChange,
   onCreateCard,
+  onRename,
 }: Props) {
   const [dragging, setDragging] = useState<Dragging>(null)
   const [droppedUid, setDroppedUid] = useState<string | null>(null)
@@ -116,10 +119,8 @@ export function Planner({
 
   const sensors = useSensors(
     useSensor(SafeMouseSensor, { activationConstraint: { distance: 4 } }),
-    // やることカード: さわってすぐ動かすとスクロール、ちょっと押さえると ドラッグ
+    // やることカード: さわってすぐ動かすとスクロール、ちょっと押さえると ドラッグ。列の「≡」つまみは すぐドラッグ
     useSensor(SafeTouchSensor, { activationConstraint: { delay: 180, tolerance: 8 } }),
-    // 列の「≡」つまみ: 長押しなしで すぐドラッグ
-    useSensor(HandleTouchSensor, { activationConstraint: { distance: 3 } }),
   )
 
   const addNormal = (card: CardDef) => onChange(insertNormalSmart(items, newItem(card), startAt, dayStartMs))
@@ -233,6 +234,7 @@ export function Planner({
           fadePast={isToday}
           nowMs={nowMs}
           onMinutes={setMinutes}
+          onRename={onRename}
           onRemove={(uid) => onChange(items.filter((i) => i.uid !== uid))}
         />
         {lastBlock?.pastEnd && lastBlock.rows.length > 0 && (
@@ -318,6 +320,7 @@ function PlanList(props: {
   fadePast: boolean
   nowMs: number
   onMinutes: (uid: string, delta: number) => void
+  onRename: (uid: string) => void
   onRemove: (uid: string) => void
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: LIST_ZONE })
@@ -356,6 +359,7 @@ function PlanList(props: {
               canUp={idx > 0}
               canDown={idx < items.length - 1}
               onMove={props.onMove}
+              onRename={props.onRename}
               startMs={row?.past ? undefined : row?.startMs}
               faded={!!row?.past}
               late={pastEnd}
@@ -520,6 +524,7 @@ function PlanRow({
   canUp,
   canDown,
   onMove,
+  onRename,
   onMinutes,
   onRemove,
 }: {
@@ -533,6 +538,7 @@ function PlanRow({
   canUp: boolean
   canDown: boolean
   onMove: (uid: string, dir: -1 | 1) => void
+  onRename: (uid: string) => void
   onMinutes: (uid: string, delta: number) => void
   onRemove: (uid: string) => void
 }) {
@@ -549,7 +555,14 @@ function PlanRow({
       <span className="plan-row__emoji" aria-hidden>
         {item.emoji}
       </span>
-      <span className="plan-row__text">
+      <span
+        className="plan-row__text plan-row__text--tap"
+        role="button"
+        tabIndex={0}
+        aria-label={`${item.name} の なまえを かえる`}
+        onClick={() => onRename(item.uid)}
+        onKeyDown={(e) => e.key === 'Enter' && onRename(item.uid)}
+      >
         <span className="plan-row__name">{item.name}</span>
         {startMs != null && <span className="plan-row__start">{formatClock(new Date(startMs))}から</span>}
       </span>
