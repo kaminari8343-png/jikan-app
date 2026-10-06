@@ -30,5 +30,9 @@ export const onii: Character = {
     cannotExtend: '{fixed}の じかんが あるから、のばせないぞ！',
     endOfDay: 'おつかれー！ゆっくり やすめよ！おやすみ！',
     extended: '{min}、のばしたぞ！',
+    early: '{min} はやかったぞ！すげえ！',
+    coinGet: 'コイン {count} ゲットだぞ！',
+    newRecord: 'しんきろくだ！やったな！',
+    tryFaster: 'つぎは はやく ちゃんと できるかな？',
   },
 }

@@ -30,5 +30,9 @@ export const neko: Character = {
     cannotExtend: '{fixed}の じかんが あるから、のばせないにゃ',
     endOfDay: 'おつかれさまにゃ。おやすみにゃ',
     extended: '{min}、のばしたにゃ',
+    early: '{min} はやかったにゃ！すごいにゃ！',
+    coinGet: 'コインを {count} もらったにゃ！',
+    newRecord: 'しんきろくだにゃ！すごいにゃ！',
+    tryFaster: 'つぎは はやく ちゃんと できるかにゃ？',
   },
 }

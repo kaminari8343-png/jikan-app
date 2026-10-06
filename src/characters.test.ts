@@ -30,9 +30,13 @@ const REQUIRED: Record<PhraseKey, string[]> = {
   cannotExtend: ['{fixed}'],
   endOfDay: [],
   extended: ['{min}'],
+  early: ['{min}'],
+  coinGet: ['{count}'],
+  newRecord: [],
+  tryFaster: [],
 }
 
-const FULL = { name: SAMPLE.name, next: SAMPLE.next, fixed: SAMPLE.fixed, clock: SAMPLE.clock, minutes: SAMPLE.minutes }
+const FULL = { name: SAMPLE.name, next: SAMPLE.next, fixed: SAMPLE.fixed, clock: SAMPLE.clock, minutes: SAMPLE.minutes, count: 3 }
 
 describe('キャラクター一覧', () => {
   it('5人: おねえさん・おにいさん・ロボット・にんじゃ・ねこ', () => {

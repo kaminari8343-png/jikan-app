@@ -34,5 +34,9 @@ export const robot: Character = {
     cannotExtend: '{fixed} ノ ジカン ガ アル タメ、エンチョウ デキマセン。ピピッ',
     endOfDay: 'ホンジツ ノ カツドウ ヲ シュウリョウ シマス。オヤスミ ナサイ。ピピッ',
     extended: '{min} エンチョウ シマシタ。ピピッ',
+    early: '{min} ハヤク シュウリョウ。ピピッ',
+    coinGet: 'コイン {count} ヲ カクトク。ピピッ',
+    newRecord: 'シン キロク ヲ コウシン。ピピッ',
+    tryFaster: 'ツギ ハ ハヤク チャント デキルカナ？ピピッ',
   },
 }

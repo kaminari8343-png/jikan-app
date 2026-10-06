@@ -12,15 +12,23 @@ export interface Settings {
   character: CharacterChoice
   /** キャラごとの調整（親が設定画面で、声・高さ・速さを かえたとき） */
   tuning: Partial<Record<CharacterId, Tuning>>
+  /** タイムトライアルの オン・オフ（カードの id ごと）。ないカードは はじめの設定 */
+  trialOverrides: Record<string, boolean>
 }
 
-export const DEFAULT_SETTINGS: Settings = { voiceOn: true, volume: 1, character: 'onee', tuning: {} }
+export const DEFAULT_SETTINGS: Settings = { voiceOn: true, volume: 1, character: 'onee', tuning: {}, trialOverrides: {} }
 
 /** 前のバージョンの設定（はやさ・たかさ が ぜんたいで ひとつ）の、はじめの値 */
 const OLD_RATE = 0.9
 const OLD_PITCH = 1.2
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+function cleanBoolMap(v: unknown): Record<string, boolean> {
+  const out: Record<string, boolean> = {}
+  if (v && typeof v === 'object') for (const [k, b] of Object.entries(v)) if (typeof b === 'boolean') out[k] = b
+  return out
+}
 
 /** 保存されていた設定を、いまの形にそろえる。前のバージョンの はやさ・たかさ は「やさしい おねえさん」の調整として引きつぐ */
 export function normalizeSettings(raw: unknown): Settings {
@@ -53,6 +61,7 @@ export function normalizeSettings(raw: unknown): Settings {
     volume: isNum(r.volume) ? Math.min(1, Math.max(0, r.volume)) : 1,
     character,
     tuning,
+    trialOverrides: cleanBoolMap(r.trialOverrides),
   }
 }
 

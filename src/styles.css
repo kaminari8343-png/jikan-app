@@ -1241,6 +1241,9 @@ input {
   font-size: 20px;
   text-align: center;
 }
+.ctrl--done {
+  background: #d9f7df;
+}
 .ctrl--blocked {
   opacity: 0.45;
 }
@@ -1669,4 +1672,120 @@ input {
 }
 .plan-row__text--tap {
   cursor: pointer;
+}
+
+/* タイムトライアル・コイン */
+.coin-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #fff3c4;
+  border: 3px solid #ffd84d;
+  font-size: 20px;
+  font-weight: 700;
+}
+.confetti {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 50;
+}
+.confetti__piece {
+  position: absolute;
+  top: -30px;
+  border-radius: 2px;
+  animation-name: confetti-fall;
+  animation-timing-function: ease-in;
+  animation-fill-mode: forwards;
+}
+@keyframes confetti-fall {
+  to {
+    top: 105%;
+    transform: rotate(720deg) translateX(40px);
+    opacity: 0.8;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti {
+    display: none;
+  }
+}
+.early-banner {
+  margin: 8px auto;
+  padding: 10px 18px;
+  border-radius: 18px;
+  background: #fff3c4;
+  border: 4px solid #ffd84d;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+}
+.early-banner small {
+  display: block;
+  font-size: 15px;
+  font-weight: 400;
+}
+.toast {
+  margin: 6px auto;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: #fffbe0;
+  border: 3px solid #ffd84d;
+  font-size: 20px;
+  font-weight: 700;
+  animation: lift 0.2s ease-out;
+}
+.trial-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.trial-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 18px;
+}
+.trial-row__name {
+  flex: 1;
+}
+.trial-row button {
+  min-width: 72px;
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 700;
+  background: #e8e8e8;
+}
+.trial-row button[aria-pressed='true'] {
+  background: #ffd84d;
+}
+.best-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.best-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 14px;
+  background: #fff;
+  font-size: 18px;
+}
+.best-row b {
+  flex: 1;
 }

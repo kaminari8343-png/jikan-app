@@ -44,5 +44,9 @@ export const onee: Character = {
     cannotExtend: '{fixed}の じかんが あるから、のばせないよ',
     endOfDay: 'おつかれさま。おやすみなさい',
     extended: '{min}、のばしたよ',
+    early: '{min} はやかった！すごい！',
+    coinGet: 'コインを {count} もらったよ',
+    newRecord: 'しんきろく！すごいね！',
+    tryFaster: 'つぎは はやく ちゃんと できるかな？',
   },
 }

@@ -9,6 +9,7 @@ import {
   currentItem,
   durationMs,
   extendCard,
+  finishEarly,
   isRunning,
   nextItem,
   pause,
@@ -23,6 +24,9 @@ import {
 import { isEndOfDay, isFixed, runSectors } from '../schedule'
 import { useWakeLock } from '../wakeLock'
 import { AnalogClock } from './AnalogClock'
+import { Confetti } from './Confetti'
+import { playFanfare, unlockAudio } from '../fanfare'
+import type { Best } from '../trial'
 
 interface PieProps {
   color: string
@@ -54,13 +58,36 @@ function PieTimer({ color, emoji, name, timeText, label, frac, ariaLabel }: PieP
   )
 }
 
-export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r: RunState) => void; onExit: () => void }) {
+export function Runner({
+  run,
+  onChange,
+  onExit,
+  bests,
+  coins,
+}: {
+  run: RunState
+  onChange: (r: RunState) => void
+  onExit: () => void
+  /** これまでの かいの じぶんベスト（recordKey(なまえ) → ベスト） */
+  bests: Map<string, Best>
+  /** もっている コインの まいすう */
+  coins: number
+}) {
   // 最新の状態を ref にも持つ（タイマーのコールバックから古い値を読まないため）
   const ref = useRef(run)
   ref.current = run
   const [, force] = useState(0)
   const [notice, setNotice] = useState<string | null>(null)
   const noticeTimer = useRef<number>(0)
+  // おいわい（紙ふぶき）と、⭕️のあとの ひとこと
+  const [confetti, setConfetti] = useState(0)
+  const [toast, setToast] = useState<string | null>(null)
+  const toastTimer = useRef<number>(0)
+  const showToast = (text: string) => {
+    setToast(text)
+    clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => setToast(null), 3500)
+  }
 
   const apply = (next: RunState) => {
     ref.current = next
@@ -69,7 +96,13 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
   const quit = () => window.confirm('やめて もどる？') && (stopSpeaking(), onExit())
 
   useWakeLock(run.phase !== 'done')
-  useEffect(() => () => clearTimeout(noticeTimer.current), [])
+  useEffect(
+    () => () => {
+      clearTimeout(noticeTimer.current)
+      clearTimeout(toastTimer.current)
+    },
+    [],
+  )
 
   useEffect(() => {
     if (run.phase === 'done') return
@@ -125,10 +158,23 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
       <span className="runner__count">
         {run.index + 1} / {run.items.length}
       </span>
+      <span className="coin-chip" aria-label={`コイン ${coins}まい`}>
+        🪙 {coins}
+      </span>
       <button type="button" className="icon-btn" aria-label="やめる" onClick={quit}>
         🏠
       </button>
     </div>
+  )
+  const extras = (
+    <>
+      {confetti > 0 && <Confetti key={confetti} />}
+      {toast && (
+        <p className="toast" role="status">
+          {toast}
+        </p>
+      )}
+    </>
   )
 
   const nextChip = (it: typeof next, lead = 'つぎは') =>
@@ -157,14 +203,29 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
   // ⭕️❌をえらぶ
   if (run.phase === 'rate') {
     const rate = (rating: Rating) => {
-      const step = rateCard(run, rating, Date.now())
+      const step = rateCard(run, rating, Date.now(), bests)
       speakCues(step.cues, { interrupt: true })
+      const rated = step.run.session.entries[run.cur]
+      if (rated?.coins) showToast(`🪙 コイン +${rated.coins}`)
+      if (rated?.record) {
+        showToast(`${rated.coins ? `🪙 コイン +${rated.coins}　` : ''}🏆 しんきろく！`)
+        playFanfare()
+      }
       apply(step.run)
     }
     const due = up && nowMs >= up.startMs ? up.item : null
+    const cur = run.session.entries[run.cur]
+    const earlyMin = cur?.trial && cur.result === 'done' ? Math.floor((cur.savedMs ?? 0) / 60_000) : 0
     return (
       <main className="runner" style={bg}>
         {top}
+        {extras}
+        {earlyMin > 0 && (
+          <p className="early-banner">
+            🎉 {earlyMin}ぷん はやかった！
+            <small>⭕を つけると コインが {earlyMin}まい もらえるよ</small>
+          </p>
+        )}
         {due && (
           <div className="fixed-banner" role="alert">
             <span>⏰</span>
@@ -201,6 +262,7 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
     return (
       <main className="runner" style={{ background: 'color-mix(in srgb, #bfe8d0 40%, #fff6e5)' }}>
         {top}
+        {extras}
         <div className="runner__body">
           {clock}
           <PieTimer
@@ -225,6 +287,7 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
     return (
       <main className="runner" style={bg}>
         {top}
+        {extras}
         <div className="runner__body">
           {clock}
           <PieTimer
@@ -258,6 +321,17 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
       noticeTimer.current = window.setTimeout(() => setNotice(null), 4000)
     }
   }
+  const finish = () => {
+    unlockAudio()
+    const step = finishEarly(run, Date.now())
+    speakCues(step.cues, { interrupt: true })
+    const done = step.run.session.entries[run.cur]
+    if (done?.trial && (done.savedMs ?? 0) >= 60_000) {
+      playFanfare()
+      setConfetti((n) => n + 1)
+    }
+    apply(step.run)
+  }
   const skip = () => {
     const step = skipCard(run, Date.now())
     speakCues(step.cues, { interrupt: true })
@@ -267,6 +341,7 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
   return (
     <main className="runner" style={bg}>
       {top}
+      {extras}
       {up && (
         <p className="runner__until">
           📌 {up.item.name}（{formatMinOfDayAp(up.item.startMin ?? 0)}）まで あと {Math.max(0, Math.ceil((up.startMs - nowMs) / 60_000))}ふん
@@ -299,6 +374,10 @@ export function Runner({ run, onChange, onExit }: { run: RunState; onChange: (r:
         <button type="button" className={`ctrl${extendable.ok ? '' : ' ctrl--blocked'}`} aria-disabled={!extendable.ok} onClick={extend}>
           <span>➕</span>
           +5ふん
+        </button>
+        <button type="button" className="ctrl ctrl--done" onClick={finish}>
+          <span>✅</span>
+          おわった！
         </button>
         <button type="button" className="ctrl" onClick={skip}>
           <span>⏭️</span>

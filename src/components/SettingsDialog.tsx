@@ -10,6 +10,7 @@ import { say } from '../phrases.logic'
 import { SAMPLE, type Character } from '../phrases'
 import { resolveCharacter } from '../voiceSettings'
 import { READINGS } from '../readings'
+import { isTrialCard } from '../trial'
 import { PRESET_CARDS } from '../cards'
 import { BUILD, formatBuild } from '../buildInfo'
 import { checkNow, reloadApp } from '../updates'
@@ -36,6 +37,10 @@ const TESTS: { label: string; text: (ch: Character) => string }[] = [
   { label: 'じゆうじかん', text: (ch) => say('freeStart', { fixed: SAMPLE.fixed, minutes: SAMPLE.free }, ch) },
   { label: 'じかんぎれ', text: (ch) => say('timeoutNote', {}, ch) },
   { label: 'のばせない', text: (ch) => say('cannotExtend', { fixed: SAMPLE.fixed }, ch) },
+  { label: 'はやかった', text: (ch) => say('early', { minutes: 3 }, ch) },
+  { label: 'コイン', text: (ch) => say('coinGet', { count: 3 }, ch) },
+  { label: 'しんきろく', text: (ch) => say('newRecord', {}, ch) },
+  { label: 'つぎは はやく', text: (ch) => say('tryFaster', {}, ch) },
   { label: 'おやすみ', text: (ch) => say('endOfDay', {}, ch) },
   { label: 'でかける 10ぷんまえ', text: (ch) => say('leaveSoon', { fixed: 'いえをでる', minutes: 10 }, ch) },
   { label: 'でかける 1ぷんまえ', text: (ch) => say('leaveSoon', { fixed: 'いえをでる', minutes: 1 }, ch) },
@@ -240,6 +245,30 @@ export function SettingsDialog({
         <button type="button" className="big-btn big-btn--sub" onClick={() => setShowTemplates(true)}>
           📆 どだいと ながい やすみを ひらく
         </button>
+      </div>
+
+      <div className="field">
+        <span>⏱ タイムトライアル（はやく おわると コイン）</span>
+        <small>オンの カードを よていより はやく「おわった！」にして ⭕を つけると、うかせた 1ぷんに つき コイン 1まい</small>
+        <ul className="trial-list">
+          {allCards.map((c) => {
+            const on = isTrialCard(c.id, settings.trialOverrides)
+            return (
+              <li key={c.id} className="trial-row">
+                <span>{c.emoji}</span>
+                <span className="trial-row__name">{c.name}</span>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`${c.name} タイムトライアル ${on ? 'オン' : 'オフ'}`}
+                  onClick={() => set('trialOverrides', { ...settings.trialOverrides, [c.id]: !on })}
+                >
+                  {on ? 'オン' : 'オフ'}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
       </div>
 
       <div className="field">
