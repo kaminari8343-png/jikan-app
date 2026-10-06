@@ -33,7 +33,7 @@ export class SafeMouseSensor extends MouseSensor {
 }
 
 /** さわった場所で はじまりかたを かえる: つまみ(≡)は すこし動いたら すぐ、それ以外（やることカード）は 長押し */
-export function touchConstraintFor(target: EventTarget | null, base: TouchConstraint): TouchConstraint {
+export function touchConstraintFor(target: EventTarget | null, base: TouchConstraint | undefined): TouchConstraint | undefined {
   return inHandle(target) ? { distance: 3 } : base
 }
 type TouchConstraint = { delay: number; tolerance: number } | { distance: number }
@@ -47,7 +47,7 @@ export class SafeTouchSensor extends TouchSensor {
   })) as typeof TouchSensor.activators
 
   constructor(props: ConstructorParameters<typeof TouchSensor>[0]) {
-    const base = (props.options.activationConstraint as TouchConstraint | undefined) ?? { delay: 180, tolerance: 8 }
+    const base = props.options.activationConstraint as TouchConstraint | undefined
     super({
       ...props,
       options: { ...props.options, activationConstraint: touchConstraintFor(props.event.target, base) },
