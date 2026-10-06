@@ -34,6 +34,9 @@ const REQUIRED: Record<PhraseKey, string[]> = {
   coinGet: ['{count}'],
   newRecord: [],
   tryFaster: [],
+  coinExtended: ['{min}'],
+  coinShort: ['{count}'],
+  extendLimit: [],
 }
 
 const FULL = { name: SAMPLE.name, next: SAMPLE.next, fixed: SAMPLE.fixed, clock: SAMPLE.clock, minutes: SAMPLE.minutes, count: 3 }

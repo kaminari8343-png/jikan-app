@@ -38,5 +38,8 @@ export const robot: Character = {
     coinGet: 'コイン {count} ヲ カクトク。ピピッ',
     newRecord: 'シン キロク ヲ コウシン。ピピッ',
     tryFaster: 'ツギ ハ ハヤク チャント デキルカナ？ピピッ',
+    coinExtended: '{min} エンチョウ シマシタ。コイン ヲ ショウヒ。ピピッ',
+    coinShort: 'コイン ガ アト {count} タリマセン。ピピッ',
+    extendLimit: 'ホンジツ ハ モウ エンチョウ デキマセン。ピピッ',
   },
 }

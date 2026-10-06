@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
-import type { CardDef, FixedCard, HistorySession, Settings, Templates, Vacation } from '../types'
+import type { CardDef, CoinSpend, FixedCard, HistorySession, Settings, Templates, Vacation } from '../types'
 import { formatMinOfDayAp, formatSpan } from '../time'
 import { FixedCardEditor } from './FixedCardEditor'
 import { TemplatesDialog } from './TemplatesDialog'
 import { DiagnosticsScreen } from './DiagnosticsScreen'
-import { buildBackup, dateKey, mergeHistory, parseBackup } from '../history'
+import { buildBackup, dateKey, mergeHistory, mergeSpends, parseBackup } from '../history'
 import { isSpeechSupported, listJaVoices, speakTest } from '../speech'
 import { say } from '../phrases.logic'
 import { SAMPLE, type Character } from '../phrases'
 import { resolveCharacter } from '../voiceSettings'
 import { READINGS } from '../readings'
 import { isTrialCard } from '../trial'
+import { isPlayCard } from '../coins'
+import { StepButton } from './StepButton'
 import { PRESET_CARDS } from '../cards'
 import { BUILD, formatBuild } from '../buildInfo'
 import { checkNow, reloadApp } from '../updates'
@@ -51,6 +53,8 @@ const TESTS: { label: string; text: (ch: Character) => string }[] = [
 const READING_TESTS = PRESET_CARDS.filter((c) => c.name in READINGS)
 
 export function SettingsDialog({
+  spends,
+  onImportSpends,
   settings,
   onChange,
   history,
@@ -66,6 +70,8 @@ export function SettingsDialog({
   allCards,
   onClose,
 }: {
+  spends: CoinSpend[]
+  onImportSpends: (s: CoinSpend[]) => void
   settings: Settings
   onChange: (s: Settings) => void
   history: HistorySession[]
@@ -91,7 +97,7 @@ export function SettingsDialog({
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const exportHistory = () => {
-    const blob = new Blob([buildBackup(history)], { type: 'application/json' })
+    const blob = new Blob([buildBackup(history, Date.now(), spends)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -109,6 +115,7 @@ export function SettingsDialog({
     if (!parsed.ok) return setBackupMsg({ ok: false, text: parsed.error })
     const { merged, added } = mergeHistory(history, parsed.sessions)
     onImportHistory(merged)
+    onImportSpends(mergeSpends(spends, parsed.coinSpends))
     setBackupMsg({
       ok: true,
       text: `${added}かい ぶん よみこんだよ${parsed.skipped ? `（よめない きろくが ${parsed.skipped}こ あったよ）` : ''}`,
@@ -272,6 +279,34 @@ export function SettingsDialog({
       </div>
 
       <div className="field">
+        <span>🎮 あそびカード と コインの つかいみち</span>
+        <small>あそびカードは、よていを くむとき さいだい {settings.playMax}ふん まで。じっこう中に コインで のばせます（+5ふんは でません）</small>
+        <ul className="trial-list">
+          {allCards.map((c) => {
+            const on = isPlayCard(c.id, settings.playOverrides)
+            return (
+              <li key={c.id} className="trial-row">
+                <span>{c.emoji}</span>
+                <span className="trial-row__name">{c.name}</span>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  aria-label={`${c.name} あそびカード ${on ? 'オン' : 'オフ'}`}
+                  onClick={() => set('playOverrides', { ...settings.playOverrides, [c.id]: !on })}
+                >
+                  {on ? 'あそび' : 'ちがう'}
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+        <NumberRow label="あそびカードの さいだい" unit="ぷん" value={settings.playMax} min={5} max={120} step={5} onChange={(v) => set('playMax', v)} />
+        <NumberRow label="のばすのに つかう コイン" unit="まい" value={settings.coinExtend.cost} min={1} max={500} step={5} onChange={(v) => set('coinExtend', { ...settings.coinExtend, cost: v })} />
+        <NumberRow label="1かいで のばす じかん" unit="ぷん" value={settings.coinExtend.minutes} min={1} max={60} step={5} onChange={(v) => set('coinExtend', { ...settings.coinExtend, minutes: v })} />
+        <NumberRow label="1日に のばせる かいすう" unit="かい" value={settings.coinExtend.perDay} min={1} max={20} step={1} onChange={(v) => set('coinExtend', { ...settings.coinExtend, perDay: v })} />
+      </div>
+
+      <div className="field">
         <span>きろくの バックアップ</span>
         <div className="test-grid">
           <button type="button" className="big-btn big-btn--sub" onClick={exportHistory}>
@@ -344,6 +379,23 @@ export function SettingsDialog({
       </div>
 
     </Modal>
+  )
+}
+
+function NumberRow(props: { label: string; unit: string; value: number; min: number; max: number; step: number; onChange: (v: number) => void }) {
+  const go = (d: number) => props.onChange(Math.min(props.max, Math.max(props.min, props.value + d * props.step)))
+  return (
+    <div className="trial-row">
+      <span className="trial-row__name">{props.label}</span>
+      <span className="stepper stepper--light">
+        <StepButton label="−" ariaLabel={`${props.label} へらす`} direction={-1} onStep={(d) => go(d)} />
+        <span className="stepper__value">
+          {props.value}
+          {props.unit}
+        </span>
+        <StepButton label="＋" ariaLabel={`${props.label} ふやす`} direction={1} onStep={(d) => go(d)} />
+      </span>
+    </div>
   )
 }
 

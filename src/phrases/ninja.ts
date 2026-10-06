@@ -34,5 +34,8 @@ export const ninja: Character = {
     coinGet: 'コイン {count} てにいれたでござる！',
     newRecord: 'しんきろくでござる！おみごと！',
     tryFaster: 'つぎは はやく ちゃんと できるかな？でござる',
+    coinExtended: '{min} のびたでござる！ニンニン',
+    coinShort: 'あと{count} たりぬでござる',
+    extendLimit: 'きょうは もう のばせぬでござる',
   },
 }

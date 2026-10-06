@@ -1,5 +1,5 @@
 // りれき: 記録の集計・はなまる判定・バックアップ
-import type { HistoryEntry, HistorySession, RunState } from './types'
+import type { CoinSpend, HistoryEntry, HistorySession, RunState } from './types'
 
 export const WEEKDAYS = ['にち', 'げつ', 'か', 'すい', 'もく', 'きん', 'ど'] as const
 
@@ -89,8 +89,8 @@ export function upsertSession(list: HistorySession[], session: HistorySession): 
 const BACKUP_APP = 'jikan-app'
 const BACKUP_VERSION = 1
 
-export function buildBackup(sessions: HistorySession[], now = Date.now()): string {
-  return JSON.stringify({ app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: now, history: sessions }, null, 2)
+export function buildBackup(sessions: HistorySession[], now = Date.now(), coinSpends: CoinSpend[] = []): string {
+  return JSON.stringify({ app: BACKUP_APP, version: BACKUP_VERSION, exportedAt: now, history: sessions, coinSpends }, null, 2)
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
@@ -120,6 +120,7 @@ function parseEntry(v: unknown): HistoryEntry | null {
     ...(isNum(e.savedMs) ? { savedMs: e.savedMs } : {}),
     ...(isNum(e.coins) ? { coins: Math.max(0, Math.floor(e.coins)) } : {}),
     ...(e.record === true ? { record: true } : {}),
+    ...(isNum(e.coinExtensions) ? { coinExtensions: Math.max(0, Math.floor(e.coinExtensions)) } : {}),
   }
 }
 
@@ -139,7 +140,14 @@ function parseSession(v: unknown): HistorySession | null {
   }
 }
 
-export type ParsedBackup = { ok: true; sessions: HistorySession[]; skipped: number } | { ok: false; error: string }
+function parseSpend(v: unknown): CoinSpend | null {
+  if (!v || typeof v !== 'object') return null
+  const s = v as Record<string, unknown>
+  if (!isStr(s.id) || !isNum(s.at) || !isNum(s.coins) || s.coins <= 0 || s.kind !== 'extend') return null
+  return { id: s.id, at: s.at, coins: Math.floor(s.coins), kind: 'extend', name: isStr(s.name) ? s.name.slice(0, 40) : '', minutes: isNum(s.minutes) ? s.minutes : 0 }
+}
+
+export type ParsedBackup = { ok: true; sessions: HistorySession[]; skipped: number; coinSpends: CoinSpend[] } | { ok: false; error: string }
 
 /** 書き出したJSONを検査して読みこむ。こわれたデータは取りこまない */
 export function parseBackup(text: string): ParsedBackup {
@@ -149,7 +157,7 @@ export function parseBackup(text: string): ParsedBackup {
   } catch {
     return { ok: false, error: 'ファイルが よめなかったよ' }
   }
-  const d = data as { app?: unknown; history?: unknown } | null
+  const d = data as { app?: unknown; history?: unknown; coinSpends?: unknown } | null
   if (!d || typeof d !== 'object' || d.app !== BACKUP_APP || !Array.isArray(d.history)) {
     return { ok: false, error: 'このアプリの きろくファイルじゃないみたい' }
   }
@@ -160,7 +168,9 @@ export function parseBackup(text: string): ParsedBackup {
     if (s) sessions.push(s)
     else skipped++
   }
-  return { ok: true, sessions, skipped }
+  // コインを つかった きろく（古いバックアップには ない）
+  const coinSpends = Array.isArray(d.coinSpends) ? d.coinSpends.map(parseSpend).filter((x): x is CoinSpend => x !== null) : []
+  return { ok: true, sessions, skipped, coinSpends }
 }
 
 /** 取りこみ: いまの記録は消さず、ないものだけ足す（同じ id は、いまのを残す） */
@@ -168,4 +178,10 @@ export function mergeHistory(current: HistorySession[], incoming: HistorySession
   const ids = new Set(current.map((s) => s.id))
   const fresh = incoming.filter((s) => !ids.has(s.id))
   return { merged: [...current, ...fresh].sort((a, b) => a.startedAt - b.startedAt), added: fresh.length }
+}
+
+/** 取りこみ: コインを つかった きろくも、ないものだけ足す */
+export function mergeSpends(current: CoinSpend[], incoming: CoinSpend[]): CoinSpend[] {
+  const ids = new Set(current.map((s) => s.id))
+  return [...current, ...incoming.filter((s) => !ids.has(s.id))].sort((a, b) => a.at - b.at)
 }

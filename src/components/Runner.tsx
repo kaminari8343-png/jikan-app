@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Rating, RunState } from '../types'
+import type { CoinSpend, Rating, RunState } from '../types'
 import { speakCues } from '../cues'
 import { stopSpeaking } from '../speech'
 import { say } from '../phrases.logic'
@@ -9,6 +9,8 @@ import {
   currentItem,
   durationMs,
   extendCard,
+  extendWithCoins,
+  type CoinRules,
   finishEarly,
   isRunning,
   nextItem,
@@ -64,6 +66,9 @@ export function Runner({
   onExit,
   bests,
   coins,
+  rules,
+  usedToday,
+  onSpend,
 }: {
   run: RunState
   onChange: (r: RunState) => void
@@ -72,6 +77,10 @@ export function Runner({
   bests: Map<string, Best>
   /** もっている コインの まいすう */
   coins: number
+  /** コインで のばす きまり・きょう のばした回数・つかったときの ほぞん */
+  rules: CoinRules
+  usedToday: number
+  onSpend: (s: CoinSpend) => void
 }) {
   // 最新の状態を ref にも持つ（タイマーのコールバックから古い値を読まないため）
   const ref = useRef(run)
@@ -332,6 +341,21 @@ export function Runner({
     }
     apply(step.run)
   }
+  const isPlay = !!item.play
+  const coinBlocked = coins < rules.cost || usedToday >= rules.perDay || !canExtend(run, nowMs, rules.minutes * 60_000).ok
+  const coinExtend = () => {
+    const step = extendWithCoins(run, Date.now(), rules, coins, usedToday)
+    speakCues(step.cues, { interrupt: true })
+    if (step.spent > 0) {
+      onSpend({ id: crypto.randomUUID(), at: Date.now(), coins: step.spent, kind: 'extend', name: item.name, minutes: rules.minutes })
+      apply(step.run)
+      showToast(`🪙 -${step.spent}　+${rules.minutes}ぷん`)
+    } else if (step.cues[0]) {
+      setNotice(say(step.cues[0].key, step.cues[0].vars))
+      clearTimeout(noticeTimer.current)
+      noticeTimer.current = window.setTimeout(() => setNotice(null), 4000)
+    }
+  }
   const skip = () => {
     const step = skipCard(run, Date.now())
     speakCues(step.cues, { interrupt: true })
@@ -371,10 +395,17 @@ export function Runner({
           <span>{running ? '⏸️' : '▶️'}</span>
           {running ? 'とめる' : 'つづける'}
         </button>
-        <button type="button" className={`ctrl${extendable.ok ? '' : ' ctrl--blocked'}`} aria-disabled={!extendable.ok} onClick={extend}>
-          <span>➕</span>
-          +5ふん
-        </button>
+        {isPlay ? (
+          <button type="button" className={`ctrl ctrl--coin${coinBlocked ? ' ctrl--blocked' : ''}`} aria-disabled={coinBlocked} onClick={coinExtend}>
+            <span>🪙</span>
+            {rules.cost}で +{rules.minutes}ぷん
+          </button>
+        ) : (
+          <button type="button" className={`ctrl${extendable.ok ? '' : ' ctrl--blocked'}`} aria-disabled={!extendable.ok} onClick={extend}>
+            <span>➕</span>
+            +5ふん
+          </button>
+        )}
         <button type="button" className="ctrl ctrl--done" onClick={finish}>
           <span>✅</span>
           おわった！

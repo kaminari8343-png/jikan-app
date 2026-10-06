@@ -80,6 +80,8 @@ interface Props {
   defaultStartMin: number
   onStartMin: (m: number | null) => void
   onChange: (items: PlanItem[]) => void
+  /** あそびカードの さいだい時間（コインで のばす カード） */
+  play: { isPlay: (cardId: string) => boolean; max: number }
   onCreateCard: () => void
   /** 列のカードをタップ: そのカードだけの なまえを つける */
   onRename: (uid: string) => void
@@ -98,10 +100,14 @@ export function Planner({
   nowMs: liveNowMs,
   defaultStartMin,
   onStartMin,
-  onChange,
+  onChange: onChangeRaw,
+  play,
   onCreateCard,
   onRename,
 }: Props) {
+  // あそびカードは、どうやって ならべても さいだい時間までに おさえる
+  const onChange = (next: PlanItem[]) =>
+    onChangeRaw(next.map((i) => (!isFixed(i) && play.isPlay(i.cardId) && i.minutes > play.max ? { ...i, minutes: play.max } : i)))
   const [dragging, setDragging] = useState<Dragging>(null)
   const [droppedUid, setDroppedUid] = useState<string | null>(null)
 
@@ -234,6 +240,7 @@ export function Planner({
           fadePast={isToday}
           nowMs={nowMs}
           onMinutes={setMinutes}
+          playMax={(it) => (play.isPlay(it.cardId) ? play.max : undefined)}
           onRename={onRename}
           onRemove={(uid) => onChange(items.filter((i) => i.uid !== uid))}
         />
@@ -320,6 +327,7 @@ function PlanList(props: {
   fadePast: boolean
   nowMs: number
   onMinutes: (uid: string, delta: number) => void
+  playMax: (item: PlanItem) => number | undefined
   onRename: (uid: string) => void
   onRemove: (uid: string) => void
 }) {
@@ -360,6 +368,7 @@ function PlanList(props: {
               canDown={idx < items.length - 1}
               onMove={props.onMove}
               onRename={props.onRename}
+              playMax={props.playMax(item)}
               startMs={row?.past ? undefined : row?.startMs}
               faded={!!row?.past}
               late={pastEnd}
@@ -525,6 +534,7 @@ function PlanRow({
   canDown,
   onMove,
   onRename,
+  playMax,
   onMinutes,
   onRemove,
 }: {
@@ -539,6 +549,8 @@ function PlanRow({
   canDown: boolean
   onMove: (uid: string, dir: -1 | 1) => void
   onRename: (uid: string) => void
+  /** あそびカードの さいだい時間（あそびカードでなければ なし） */
+  playMax?: number
   onMinutes: (uid: string, delta: number) => void
   onRemove: (uid: string) => void
 }) {
@@ -565,6 +577,7 @@ function PlanRow({
       >
         <span className="plan-row__name">{item.name}</span>
         {startMs != null && <span className="plan-row__start">{formatClock(new Date(startMs))}から</span>}
+        {playMax != null && item.minutes >= playMax && <span className="play-note">🎮 あそびは {formatMinutes(playMax)}までだよ</span>}
       </span>
       <span className="stepper">
         <StepButton label="−" ariaLabel={`${item.name} 1ぷん へらす`} direction={-1} onStep={(d) => onMinutes(item.uid, d)} />

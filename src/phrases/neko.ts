@@ -34,5 +34,8 @@ export const neko: Character = {
     coinGet: 'コインを {count} もらったにゃ！',
     newRecord: 'しんきろくだにゃ！すごいにゃ！',
     tryFaster: 'つぎは はやく ちゃんと できるかにゃ？',
+    coinExtended: '{min} のびたにゃ！',
+    coinShort: 'あと{count} たりないにゃ',
+    extendLimit: 'きょうは もう のばせないにゃ',
   },
 }
