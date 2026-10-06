@@ -10,6 +10,12 @@ export const PRESET_CARDS: CardDef[] = [
   { id: 'unext', name: 'ユーネクスト', emoji: '🍿', color: '#4dd0e1', minutes: 30 },
   { id: 'tv', name: 'テレビ', emoji: '📺', color: '#d4e157', minutes: 30 },
   { id: 'youtube', name: 'ユーチューブ', emoji: '▶️', color: '#e07be0', minutes: 30 },
+  // べんきょう（予定に入れたあと、カードをタップして「なまえ」を つけかえられる）
+  { id: 'math', name: 'さんすう', emoji: '➕', color: '#78ff78', minutes: 15 },
+  { id: 'japanese', name: 'こくご', emoji: '📖', color: '#f0ffb4', minutes: 15 },
+  { id: 'reading', name: 'おんどく', emoji: '🗣️', color: '#b4ffff', minutes: 10 },
+  { id: 'calc-card', name: 'けいさんカード', emoji: '🔢', color: '#b47878', minutes: 10 },
+  { id: 'kana', name: 'ひらがな・カタカナ', emoji: '🔤', color: '#e0e0e0', minutes: 10 },
   { id: 'prepare', name: 'あしたのじゅんび', emoji: '🎒', color: '#c4a1ff', minutes: 10 },
 ]
 

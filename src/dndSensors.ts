@@ -18,12 +18,10 @@ export const HANDLE_SELECTOR = '[data-drag-handle]'
 const inHandle = (t: EventTarget | null) => t instanceof Element && t.closest(HANDLE_SELECTOR) !== null
 
 const guard =
-  <E extends Event>(handler: Handler<E>, only?: 'handle' | 'body'): Handler<E> =>
+  <E extends Event>(handler: Handler<E>): Handler<E> =>
   (event, options) => {
     const t = event.nativeEvent.target
     if (isInteractiveTarget(t)) return false
-    if (only === 'handle' && !inHandle(t)) return false
-    if (only === 'body' && inHandle(t)) return false
     return handler(event, options)
   }
 
@@ -34,17 +32,25 @@ export class SafeMouseSensor extends MouseSensor {
   })) as typeof MouseSensor.activators
 }
 
+/** さわった場所で はじまりかたを かえる: つまみ(≡)は すこし動いたら すぐ、それ以外（やることカード）は 長押し */
+export function touchConstraintFor(target: EventTarget | null, base: TouchConstraint): TouchConstraint {
+  return inHandle(target) ? { distance: 3 } : base
+}
+type TouchConstraint = { delay: number; tolerance: number } | { distance: number }
+
+// 注意: dnd-kit は、同じイベント(touchstart)を見る センサーが2つあると、あとの1つだけが 効く。
+// なので タッチ用のセンサーは 1つだけにして、中で つまみ／本体を 見わける。
 export class SafeTouchSensor extends TouchSensor {
   static activators = TouchSensor.activators.map((a) => ({
     ...a,
-    handler: guard(a.handler as unknown as Handler<TouchEvent>, 'body'),
+    handler: guard(a.handler as unknown as Handler<TouchEvent>),
   })) as typeof TouchSensor.activators
-}
 
-/** つまみ専用: さわったら すぐ はじまる（ほんの少し動いたら） */
-export class HandleTouchSensor extends TouchSensor {
-  static activators = TouchSensor.activators.map((a) => ({
-    ...a,
-    handler: guard(a.handler as unknown as Handler<TouchEvent>, 'handle'),
-  })) as typeof TouchSensor.activators
+  constructor(props: ConstructorParameters<typeof TouchSensor>[0]) {
+    const base = (props.options.activationConstraint as TouchConstraint | undefined) ?? { delay: 180, tolerance: 8 }
+    super({
+      ...props,
+      options: { ...props.options, activationConstraint: touchConstraintFor(props.event.target, base) },
+    })
+  }
 }

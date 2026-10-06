@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { DEFAULT_FIXED_CARDS, MORNING_CARDS, PRESET_CARDS } from './cards'
 import { AnalogClock } from './components/AnalogClock'
 import { CardEditor } from './components/CardEditor'
+import { RenameDialog } from './components/RenameDialog'
 import { Planner } from './components/Planner'
 import { Runner } from './components/Runner'
 import { speakCues } from './cues'
@@ -25,7 +26,7 @@ import { HistoryScreen } from './components/HistoryScreen'
 import type { CardDef, DayType, FixedCard, HistorySession, PlanItem, RunState, SavedPlan, Settings, Templates, Vacation } from './types'
 import { load, save } from './storage'
 
-type Dialog = null | 'card' | 'presets' | 'settings'
+type Dialog = null | 'card' | 'presets' | 'settings' | 'rename'
 type Screen = 'plan' | 'history'
 
 const NO_ITEMS: PlanItem[] = []
@@ -55,6 +56,7 @@ export function App() {
   // 声の設定: 前のバージョンの保存データも、いまの形（キャラ・調整）にそろえて読みこむ
   const [settings, setSettings] = useState<Settings>(() => normalizeSettings(load<unknown>('settings', null)))
   const [dialog, setDialog] = useState<Dialog>(null)
+  const [renameUid, setRenameUid] = useState<string | null>(null)
   // ダイアログは 全画面のページ。ひらく前の スクロール位置をおぼえて、とじたら もどす
   const savedScroll = useRef<number | null>(null)
   const openDialog = (d: Exclude<Dialog, null>) => {
@@ -187,6 +189,8 @@ export function App() {
     )
   }
 
+  const renaming = plan.find((i) => i.uid === renameUid)
+
   // ダイアログがひらいている間は、そのページだけを出す（うしろの よてい画面・ドラッグ部品は ない）
   if (dialog) {
     return (
@@ -196,6 +200,16 @@ export function App() {
             onClose={() => setDialog(null)}
             onSave={(c) => {
               setCustomCards([...customCards, c])
+              setDialog(null)
+            }}
+          />
+        )}
+        {dialog === 'rename' && renaming && (
+          <RenameDialog
+            item={renaming}
+            onClose={() => setDialog(null)}
+            onSave={(name) => {
+              setPlan(plan.map((i) => (i.uid === renaming.uid ? { ...i, name } : i)))
               setDialog(null)
             }}
           />
@@ -284,6 +298,10 @@ export function App() {
             onStartMin={(m) => setStartMins((s) => ({ ...s, [selKey]: m }))}
             onChange={setPlan}
             onCreateCard={() => openDialog('card')}
+            onRename={(uid) => {
+              setRenameUid(uid)
+              openDialog('rename')
+            }}
           />
 
           <div className="actions">

@@ -1662,3 +1662,11 @@ input {
   user-select: text;
   -webkit-user-select: text;
 }
+.hint {
+  font-size: 15px;
+  opacity: 0.75;
+  margin: 4px 0 12px;
+}
+.plan-row__text--tap {
+  cursor: pointer;
+}
